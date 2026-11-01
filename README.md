@@ -12,7 +12,7 @@ logged and does not affect the target.** The question this repository answers is
 the control half: can one velocity-conditioned walking policy, trained once with RL, be
 driven by a simple Navigator to reach instructed targets in closed loop, physics only?
 
-[![ci](https://github.com/physical-ai-vla/g1_target_walking/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![ci](https://github.com/physical-ai-vla/g1-target-walking/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial-orange.svg)](LICENSE)
 
 **Engineering report:** [`docs/report.md`](docs/report.md) ([PDF](docs/report.pdf)) ·
@@ -81,8 +81,8 @@ driven by a simple Navigator to reach instructed targets in closed loop, physics
 ## Installation
 
 ```bash
-git clone https://github.com/physical-ai-vla/g1_target_walking.git
-cd g1_target_walking
+git clone https://github.com/physical-ai-vla/g1-target-walking.git
+cd g1-target-walking
 bash install.sh              # NVIDIA GPU -> full stack; otherwise dashboard-only
 source .venv/bin/activate && bash run_dashboard.sh
 ```
@@ -234,6 +234,6 @@ Citation: see [`CITATION.cff`](CITATION.cff).
   author = {Lee, Jeong Hwan},
   title  = {G1Nav: Humanoid Locomotion RL with Hierarchical Target Navigation (Unitree G1, MuJoCo/MJX)},
   year   = {2026},
-  url    = {https://github.com/physical-ai-vla/g1_target_walking}
+  url    = {https://github.com/physical-ai-vla/g1-target-walking}
 }
 ```
