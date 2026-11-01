@@ -1,0 +1,3 @@
+[navigate] G1NAV_CPU=1 JAX_PLATFORMS=cpu
+[navigate] sim_dt=0.002 ctrl_dt=0.02 n_substeps=10
+NAV seed=2 target='purple cylinder' reached=True final_dist_to_goal=0.54m base_z=0.75 frames=668 -> <outdir>/nav_seed2.mp4

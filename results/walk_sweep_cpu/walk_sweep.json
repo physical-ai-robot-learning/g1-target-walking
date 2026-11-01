@@ -1,0 +1,130 @@
+[
+  {
+    "ckpt": "walk_t4_step0000000000.pkl",
+    "step": 0,
+    "net_dist": 0.45,
+    "fwd_vel": 0.362,
+    "min_z": -0.78,
+    "verdict": "FALLS"
+  },
+  {
+    "ckpt": "walk_t4_step0010321920.pkl",
+    "step": 10321920,
+    "net_dist": 0.55,
+    "fwd_vel": 0.278,
+    "min_z": -0.78,
+    "verdict": "FALLS"
+  },
+  {
+    "ckpt": "walk_t4_step0020643840.pkl",
+    "step": 20643840,
+    "net_dist": 0.59,
+    "fwd_vel": 0.412,
+    "min_z": -0.76,
+    "verdict": "FALLS"
+  },
+  {
+    "ckpt": "walk_t4_step0030965760.pkl",
+    "step": 30965760,
+    "net_dist": 0.76,
+    "fwd_vel": -0.267,
+    "min_z": -0.76,
+    "verdict": "FALLS"
+  },
+  {
+    "ckpt": "walk_t4_step0041287680.pkl",
+    "step": 41287680,
+    "net_dist": 1.54,
+    "fwd_vel": 0.323,
+    "min_z": 0.73,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0051609600.pkl",
+    "step": 51609600,
+    "net_dist": 1.95,
+    "fwd_vel": 0.392,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0061931520.pkl",
+    "step": 61931520,
+    "net_dist": 2.51,
+    "fwd_vel": 0.504,
+    "min_z": 0.73,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0072253440.pkl",
+    "step": 72253440,
+    "net_dist": 2.71,
+    "fwd_vel": 0.546,
+    "min_z": 0.73,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0082575360.pkl",
+    "step": 82575360,
+    "net_dist": 2.7,
+    "fwd_vel": 0.543,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0092897280.pkl",
+    "step": 92897280,
+    "net_dist": 2.8,
+    "fwd_vel": 0.562,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0103219200.pkl",
+    "step": 103219200,
+    "net_dist": 2.78,
+    "fwd_vel": 0.559,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0113541120.pkl",
+    "step": 113541120,
+    "net_dist": 2.75,
+    "fwd_vel": 0.552,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0123863040.pkl",
+    "step": 123863040,
+    "net_dist": 2.69,
+    "fwd_vel": 0.542,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0134184960.pkl",
+    "step": 134184960,
+    "net_dist": 2.78,
+    "fwd_vel": 0.557,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0144506880.pkl",
+    "step": 144506880,
+    "net_dist": 2.89,
+    "fwd_vel": 0.58,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  },
+  {
+    "ckpt": "walk_t4_step0154828800.pkl",
+    "step": 154828800,
+    "net_dist": 2.59,
+    "fwd_vel": 0.52,
+    "min_z": 0.74,
+    "verdict": "WALKS"
+  }
+]

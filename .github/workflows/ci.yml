@@ -1,0 +1,23 @@
+# Checks that need no GPU, MuJoCo, JAX or brax: byte-compilation, the claims check
+# (every number in README / report / VIDEOS.md recomputed from committed files) and the
+# pytest suite (keyword rule, scene generator, Navigator, committed artifacts, English-only text).
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install numpy pillow pytest
+      - name: Byte-compile every Python file
+        run: python -m compileall -q -x '/\.git/' .
+      - name: Claims check
+        run: python analysis/verify_claims.py
+      - name: Tests
+        run: python -m pytest -q tests
