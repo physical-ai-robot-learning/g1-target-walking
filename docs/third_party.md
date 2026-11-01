@@ -34,3 +34,18 @@ in the MuJoCo Playground environment. They contain only weights and observation-
 statistics trained here and are covered by this repository's LICENSE. Loading them with
 `pickle` executes code paths of brax/jax; `analysis/evidence.py` reads them with a restricted
 unpickler instead.
+
+## Pinned optional dependency with known advisories
+
+`requirements-eagle.txt` pins `transformers==4.51.3` (with `torch` and `accelerate`) because the GR00T N1.6 Eagle backbone
+was verified with that version (`code/navigation/cortex_eagle.py`). This version has published security advisories, which
+GitHub reports for this file. The pin is kept on purpose and is isolated:
+
+- it is **optional and logging-only**: the Eagle embedding is computed and logged, never used for target selection,
+  navigation or control;
+- it is **not part of the core install** (`requirements-gpu.txt`, `requirements-dashboard.txt`) and not needed for
+  training, navigation or any reported result;
+- install it in a separate environment only to reproduce the logged embeddings (`WITH_EAGLE=1 bash install.sh gpu`).
+
+The corresponding GitHub alerts are dismissed as tolerable risk with this explanation; dismissing them does not remove
+the vulnerable version from `requirements-eagle.txt`.
