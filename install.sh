@@ -34,6 +34,10 @@ if [ "$MODE" = "gpu" ]; then
   echo "[install] installing full GPU requirements (this can take a few minutes)…"
   pip install -q "jax[cuda12]==0.5.3" || pip install -q jax==0.5.3
   pip install -q -r requirements-gpu.txt
+  if [ "${WITH_EAGLE:-0}" = "1" ]; then
+    echo "[install] optional: GR00T N1.6 Eagle logging dependency (requirements-eagle.txt)"
+    pip install -q -r requirements-eagle.txt
+  fi
   echo "[install] done. GPU stack ready — the dashboard will run the pipeline LOCALLY."
 else
   echo "[install] installing dashboard-only requirements…"

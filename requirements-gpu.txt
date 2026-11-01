@@ -1,6 +1,6 @@
 # G1Nav — full GPU requirements (Ada-generation NVIDIA GPU).
-# Runs EVERYTHING locally: PPO training, MJX rollout, the N1.6 Eagle cognition,
-# the closed-loop navigation, and the interactive dashboard in LOCAL mode.
+# Runs locally: PPO training, MJX rollout, the closed-loop navigation and the interactive
+# dashboard in LOCAL mode. Everything needed for the reported results is here.
 #
 # Pinned stack that is verified to work end-to-end (see report.md §6):
 #   developed on RTX 6000 Ada (48 GB), CUDA 12.x, Python 3.10–3.12.
@@ -15,10 +15,8 @@ distrax
 mujoco==3.4.0
 mujoco-mjx==3.4.0
 playground==0.1.0            # mujoco_playground
-# cognition: GR00T N1.6 Eagle vision encoder (transformers must be this version)
-torch>=2.4
-transformers==4.51.3
-accelerate
+# The GR00T N1.6 Eagle encoder (torch + transformers) is NOT part of this core stack:
+# see requirements-eagle.txt (optional, logging-only).
 # dashboards + io
 streamlit>=1.30
 pandas>=2.0

@@ -18,6 +18,8 @@ source .venv/bin/activate
 ```
 
 This creates `.venv` and installs `requirements-gpu.txt` or `requirements-dashboard.txt`.
+The GR00T N1.6 Eagle encoder is optional and logging-only (not needed for any reported result); to
+reproduce the logged embeddings, also install `requirements-eagle.txt` (`WITH_EAGLE=1 bash install.sh gpu`).
 
 ## 2. Dashboards
 

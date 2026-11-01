@@ -1,0 +1,12 @@
+# G1Nav — OPTIONAL GR00T N1.6 Eagle logging dependency.
+# Not required for locomotion training, navigation, or the reported target-reaching results:
+# in the recorded demos the Eagle embedding of the start frame is computed and logged only;
+# target selection is a keyword rule and the target position is simulator ground truth.
+#
+# transformers is pinned to the version the GR00T N1.6 Eagle backbone was verified with
+# (code/navigation/cortex_eagle.py). This old pin carries known advisories; install it in a
+# separate environment only if you want to reproduce the logged embeddings.
+#   pip install -r requirements-eagle.txt      (or: WITH_EAGLE=1 bash install.sh gpu)
+torch>=2.4
+transformers==4.51.3
+accelerate

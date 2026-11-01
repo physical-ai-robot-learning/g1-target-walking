@@ -89,7 +89,9 @@ source .venv/bin/activate && bash run_dashboard.sh
 
 The checks need only Python 3 with numpy and Pillow (`pip install numpy pillow pytest`). The
 simulation stack is pinned to jax 0.5.3, brax 0.14.2, flax 0.10.6, mujoco / mujoco-mjx 3.4.0 and
-playground 0.1.0. Remote-GPU mode, the optional Eagle encoder and the CPU set-up used for the
+playground 0.1.0. The GR00T N1.6 Eagle encoder is an **optional, logging-only** dependency kept in
+[`requirements-eagle.txt`](requirements-eagle.txt) (old `transformers` pin for compatibility); it is not needed for
+training, navigation or any reported result. Remote-GPU mode, the Eagle set-up and the CPU set-up used for the
 re-measurements are described in [INSTALL.md](INSTALL.md).
 
 ## Pipeline
