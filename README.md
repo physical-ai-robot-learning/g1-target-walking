@@ -15,6 +15,8 @@ driven by a simple Navigator to reach instructed targets in closed loop, physics
 [![ci](https://github.com/physical-ai-vla/g1-target-walking/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial-orange.svg)](LICENSE)
 
+Part of **[physical-ai-vla](https://github.com/physical-ai-vla)** — Physical AI / robot learning projects.
+
 **Engineering report:** [`docs/report.md`](docs/report.md) ([PDF](docs/report.pdf)) ·
 **Claims check:** `python analysis/verify_claims.py` ([audit](docs/claims.md)) ·
 **Third-party licences:** [`docs/third_party.md`](docs/third_party.md) · **Provenance:** [`docs/provenance.md`](docs/provenance.md) · status: finished prototype, 2026-11-01
