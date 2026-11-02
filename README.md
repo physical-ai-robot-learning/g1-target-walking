@@ -12,10 +12,10 @@ logged and does not affect the target.** The question this repository answers is
 the control half: can one velocity-conditioned walking policy, trained once with RL, be
 driven by a simple Navigator to reach instructed targets in closed loop, physics only?
 
-[![ci](https://github.com/physical-ai-vla/g1-target-walking/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![ci](https://github.com/physical-ai-robot-learning/g1-target-walking/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial-orange.svg)](LICENSE)
 
-Part of **[physical-ai-vla](https://github.com/physical-ai-vla)** — Physical AI / robot learning projects.
+Part of **[physical-ai-robot-learning](https://github.com/physical-ai-robot-learning)** — Physical AI / robot learning projects.
 
 **Engineering report:** [`docs/report.md`](docs/report.md) ([PDF](docs/report.pdf)) ·
 **Claims check:** `python analysis/verify_claims.py` ([audit](docs/claims.md)) ·
@@ -83,7 +83,7 @@ Part of **[physical-ai-vla](https://github.com/physical-ai-vla)** — Physical A
 ## Installation
 
 ```bash
-git clone https://github.com/physical-ai-vla/g1-target-walking.git
+git clone https://github.com/physical-ai-robot-learning/g1-target-walking.git
 cd g1-target-walking
 bash install.sh              # NVIDIA GPU -> full stack; otherwise dashboard-only
 source .venv/bin/activate && bash run_dashboard.sh
@@ -238,6 +238,6 @@ Citation: see [`CITATION.cff`](CITATION.cff).
   author = {Lee, Jeong Hwan},
   title  = {G1Nav: Humanoid Locomotion RL with Hierarchical Target Navigation (Unitree G1, MuJoCo/MJX)},
   year   = {2026},
-  url    = {https://github.com/physical-ai-vla/g1-target-walking}
+  url    = {https://github.com/physical-ai-robot-learning/g1-target-walking}
 }
 ```
