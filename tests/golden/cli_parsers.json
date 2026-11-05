@@ -1,0 +1,579 @@
+{
+ "cortex_eagle": [
+  {
+   "action": "_StoreAction",
+   "default": null,
+   "dest": "image",
+   "flags": [
+    "--image"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": true,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": null,
+   "dest": "instruction",
+   "flags": [
+    "--instruction"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": true,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": "",
+   "dest": "labels",
+   "flags": [
+    "--labels"
+   ],
+   "help": "comma-separated scene object labels",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": "/workspace/ckpt/cortex_result.json",
+   "dest": "result",
+   "flags": [
+    "--result"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  }
+ ],
+ "g1nav_run": [
+  {
+   "action": "_StoreAction",
+   "default": 0,
+   "dest": "seed",
+   "flags": [
+    "--seed"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "default": "go to the orange cylinder",
+   "dest": "instruction",
+   "flags": [
+    "--instruction"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": "<repo>/checkpoint/walk_t4_latest.pkl",
+   "dest": "ckpt",
+   "flags": [
+    "--ckpt"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": "<repo>/checkpoint/eagle-n16",
+   "dest": "eagle",
+   "flags": [
+    "--eagle"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": "<repo>/outputs",
+   "dest": "outdir",
+   "flags": [
+    "--outdir"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": 14.0,
+   "dest": "seconds",
+   "flags": [
+    "--seconds"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  }
+ ],
+ "navigate": [
+  {
+   "action": "_StoreAction",
+   "default": null,
+   "dest": "ckpt",
+   "flags": [
+    "--ckpt"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": true,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": 0,
+   "dest": "seed",
+   "flags": [
+    "--seed"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "default": null,
+   "dest": "target",
+   "flags": [
+    "--target"
+   ],
+   "help": "object label e.g. 'orange cylinder'; default=first object",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": 12.0,
+   "dest": "seconds",
+   "flags": [
+    "--seconds"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "default": "/workspace/ckpt/nav.mp4",
+   "dest": "out",
+   "flags": [
+    "--out"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "default": false,
+   "dest": "use_vlm",
+   "flags": [
+    "--use_vlm"
+   ],
+   "help": "reserved, not implemented: the target position is always read from the generated scene (ground truth)",
+   "metavar": null,
+   "nargs": 0,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "default": false,
+   "dest": "cpu",
+   "flags": [
+    "--cpu"
+   ],
+   "help": "force JAX onto CPU (use when a GPU training job owns the device)",
+   "metavar": null,
+   "nargs": 0,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": null,
+   "dest": "fixed_cmd",
+   "flags": [
+    "--fixed_cmd"
+   ],
+   "help": "ignore Navigator; drive a constant (vx,vy,wz) command",
+   "metavar": [
+    "VX",
+    "VY",
+    "WZ"
+   ],
+   "nargs": 3,
+   "required": false,
+   "type": "float"
+  }
+ ],
+ "rerun_demo_episodes": [
+  {
+   "action": "_StoreAction",
+   "default": "<repo>/results/demo_rerun_cpu",
+   "dest": "outdir",
+   "flags": [
+    "--outdir"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": "<repo>/checkpoint/walk_t4_latest.pkl",
+   "dest": "ckpt",
+   "flags": [
+    "--ckpt"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": 12.0,
+   "dest": "seconds",
+   "flags": [
+    "--seconds"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreTrueAction",
+   "default": false,
+   "dest": "cpu",
+   "flags": [
+    "--cpu"
+   ],
+   "help": "run the policy with JAX on CPU",
+   "metavar": null,
+   "nargs": 0,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "default": false,
+   "dest": "keep_video",
+   "flags": [
+    "--keep_video"
+   ],
+   "help": "keep the rendered mp4s",
+   "metavar": null,
+   "nargs": 0,
+   "required": false,
+   "type": null
+  }
+ ],
+ "rollout_walk": [
+  {
+   "action": "_StoreAction",
+   "default": null,
+   "dest": "ckpt",
+   "flags": [
+    "--ckpt"
+   ],
+   "help": "path to *_latest.pkl or *.pkl",
+   "metavar": null,
+   "nargs": null,
+   "required": true,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": "G1JoystickFlatTerrain",
+   "dest": "env",
+   "flags": [
+    "--env"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": 0.5,
+   "dest": "vx",
+   "flags": [
+    "--vx"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "default": 0.0,
+   "dest": "vy",
+   "flags": [
+    "--vy"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "default": 0.0,
+   "dest": "wz",
+   "flags": [
+    "--wz"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "default": 6.0,
+   "dest": "seconds",
+   "flags": [
+    "--seconds"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "default": "/workspace/ckpt/rollout.mp4",
+   "dest": "out",
+   "flags": [
+    "--out"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  }
+ ],
+ "scene_gen": [
+  {
+   "action": "_StoreAction",
+   "default": 0,
+   "dest": "seed",
+   "flags": [
+    "--seed"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "default": "",
+   "dest": "out",
+   "flags": [
+    "--out"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "str"
+  },
+  {
+   "action": "_StoreTrueAction",
+   "default": false,
+   "dest": "validate",
+   "flags": [
+    "--validate"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": 0,
+   "required": false,
+   "type": null
+  }
+ ],
+ "train_walk": [
+  {
+   "action": "_StoreAction",
+   "default": "G1JoystickFlatTerrain",
+   "dest": "env",
+   "flags": [
+    "--env"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": 60000000,
+   "dest": "timesteps",
+   "flags": [
+    "--timesteps"
+   ],
+   "help": "PPO env steps. Full recipe is 200M; 40-80M usually walks.",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "default": "/workspace/ckpt/walk",
+   "dest": "out",
+   "flags": [
+    "--out"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": 8192,
+   "dest": "num_envs",
+   "flags": [
+    "--num_envs"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "default": 0,
+   "dest": "seed",
+   "flags": [
+    "--seed"
+   ],
+   "help": null,
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "default": null,
+   "dest": "restore",
+   "flags": [
+    "--restore"
+   ],
+   "help": "path to a *_latest.pkl / *.pkl to resume training from",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "default": -3.0,
+   "dest": "termination",
+   "flags": [
+    "--termination"
+   ],
+   "help": "fall penalty scale; default -3 (env default is -100, which makes the policy too scared to attempt walking)",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "default": 100,
+   "dest": "num_evals",
+   "flags": [
+    "--num_evals"
+   ],
+   "help": "number of evals across training; each saves a checkpoint",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "default": 2.0,
+   "dest": "track_lin",
+   "flags": [
+    "--track_lin"
+   ],
+   "help": "tracking_lin_vel reward scale (default env=1.0; raise to force forward motion)",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "default": -3.0,
+   "dest": "stand_still",
+   "flags": [
+    "--stand_still"
+   ],
+   "help": "stand_still penalty scale (default env=-1.0; more negative discourages standing)",
+   "metavar": null,
+   "nargs": null,
+   "required": false,
+   "type": "float"
+  }
+ ]
+}
