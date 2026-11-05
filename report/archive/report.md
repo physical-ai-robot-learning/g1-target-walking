@@ -16,7 +16,7 @@ motion is physics-simulated; there is no kinematic playback.
 > something the demos show.
 
 Every number in this report is checked against files in the repository by
-`python -m analysis.verify_claims`; the claim-by-claim audit is in [claims.md](../docs/claims.md).
+`python -m analysis.verify_claims`; the claim-by-claim audit is in [claims.md](../../docs/claims.md).
 
 ---
 

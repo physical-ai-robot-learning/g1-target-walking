@@ -1,5 +1,6 @@
 # Checks that need no GPU, MuJoCo, JAX or brax: byte-compilation, the claims check
-# (every number in README / report / media/README.md recomputed from committed files) and the
+# (every number in README / archived report / media/README.md recomputed from committed files), the
+# technical report's number check (every number in report/report_en.tex found in its source file) and the
 # pytest suite (characterization goldens, keyword rule, scene generator, Navigator, CLI parsers,
 # dashboards' first render, committed artifacts, English-only text). The simulation checks
 # (tests/test_sim_rerun.py) are opt-in and skipped here.
@@ -19,7 +20,9 @@ jobs:
         run: python -m pip install -e ".[test,dashboard]"
       - name: Byte-compile every Python file
         run: python -m compileall -q -x '/\.git/' .
-      - name: Claims check
+      - name: Claims check (README, archived report, media/README.md)
         run: python -m analysis.verify_claims
+      - name: Report number check (report/report_en.tex)
+        run: python -m analysis.verify_report
       - name: Tests
         run: python -m pytest -q tests

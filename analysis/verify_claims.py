@@ -1,4 +1,4 @@
-"""Check every number stated in README.md, report/report.md and media/README.md.
+"""Check every number stated in README.md, report/archive/report.md (the Markdown engineering report) and media/README.md.
 
 Each claim recomputes a value from files committed in this repository and checks
 that the documents state exactly that value (as a literal text snippet). Needs
@@ -22,7 +22,7 @@ from analysis import evidence as ev
 
 ROOT = ev.ROOT
 README = "README.md"
-REPORT = "report/report.md"
+REPORT = "report/archive/report.md"
 VIDEOS = "media/README.md"
 
 

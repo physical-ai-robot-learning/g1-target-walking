@@ -110,4 +110,4 @@ re-runs both and compares them with the committed files (about 2 minutes on an A
   the same keyword rule (`src/g1nav/navigation/grounding.py`), so the chosen target is identical.
 - **No GPU and no remote machine:** use the results dashboard (8501).
 
-See [report/report.md](../report/report.md) for the architecture and the engineering log.
+See the technical report [report/report_en.pdf](../report/report_en.pdf) for the architecture and the engineering log.

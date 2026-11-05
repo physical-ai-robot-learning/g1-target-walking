@@ -11,6 +11,7 @@ package under `src/`, `archive/` instead of `legacy/`, `media/`, `results/`, `co
 | characterization tests | golden values recorded on the untouched `code/` tree (see "Verification") |
 | layout | `git mv` into the new tree + import / path rewrites only; `pyproject.toml`, `g1nav.paths` |
 | OA style | module-by-module restyle, docstrings, `main(argv) -> int`, no import-time work, READMEs, docs |
+| technical report | `report/report_en.tex` / `.pdf` (IEEEtran) + figures, `analysis/verify_report.py` in CI; the Markdown report moved to `report/archive/` |
 
 ## Old → new path map
 
@@ -31,7 +32,7 @@ package under `src/`, `archive/` instead of `legacy/`, `media/`, `results/`, `co
 | `checkpoint/*` | `results/checkpoints/*` |
 | `dataset/NOTE.md` | `docs/dataset.md` |
 | `INSTALL.md` | `docs/install.md` |
-| `docs/report.md`, `docs/report.pdf` | `report/report.md`, `report/report.pdf` |
+| `docs/report.md`, `docs/report.pdf` | `report/archive/report.md`, `report/archive/report.pdf` (superseded by `report/report_en.tex` / `.pdf`, see report/README.md) |
 | `install.sh`, `run_dashboard.sh` | `scripts/install.sh`, `scripts/run_dashboard.sh` |
 | `requirements-{gpu,dashboard,eagle}.txt` | `configs/envs/` (kept as the record of what was run) + extras in `pyproject.toml` |
 | `python code/<x>/<m>.py` | `python -m g1nav.<x>.<m>` (after `pip install -e .`) |

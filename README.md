@@ -17,7 +17,7 @@ driven by a simple Navigator to reach instructed targets in closed loop, physics
 
 Part of **[physical-ai-robot-learning](https://github.com/physical-ai-robot-learning)** — Physical AI / robot learning projects.
 
-**Engineering report:** [`report/report.md`](report/report.md) ([PDF](report/report.pdf)) ·
+**Technical report:** [`report/report_en.pdf`](report/report_en.pdf) ([LaTeX](report/report_en.tex); earlier Markdown engineering report in [`report/archive/`](report/archive/report.md)) ·
 **Results:** [`results/`](results/README.md) ·
 **Claims check:** `python -m analysis.verify_claims` ([audit](docs/claims.md)) ·
 **Third-party licences:** [`docs/third_party.md`](docs/third_party.md) · **Provenance:** [`docs/provenance.md`](docs/provenance.md) · status: finished prototype, 2026-11-01
@@ -41,7 +41,7 @@ Part of **[physical-ai-robot-learning](https://github.com/physical-ai-robot-lear
   environment, because the training wrapper's auto-reset made a falling policy look like it was
   stepping in place; and two deployment bugs: missing observation normalisation, and a gravity
   term computed in the wrong frame, which only showed when the robot turned
-  ([engineering log](report/report.md#5-what-went-wrong-and-the-fixes-engineering-log)).
+  ([technical report](report/report_en.pdf), Sec. VI; [engineering log](report/archive/report.md#5-what-went-wrong-and-the-fixes-engineering-log)).
 
 **What this repository does not show**
 
@@ -72,7 +72,7 @@ Part of **[physical-ai-robot-learning](https://github.com/physical-ai-robot-lear
 | [`results/`](results/README.md) | checkpoints + training metrics (`checkpoints/`), CPU re-measurements | you want the files behind the numbers |
 | [`media/`](media/README.md) | the three demo episodes (mp4, gif, start ego frame, cognition JSON) | you want to watch the result |
 | [`analysis/`](analysis/README.md) | evidence readers and the claims check (CI) | you want to check a number |
-| [`report/`](report/report.md) | engineering report (Markdown + PDF) | you want the full story, incl. what went wrong |
+| [`report/`](report/README.md) | technical report (IEEEtran LaTeX + PDF, figures), earlier Markdown report in `archive/` | you want the full story, incl. what went wrong |
 | [`docs/`](docs/) | install guide, claims audit, data note, provenance, third-party licences, refactor log | you want details |
 | [`scripts/`](scripts/README.md) | install / dashboard launchers, GPU-machine (`pod/`) set-up and runners | you want to run things on a GPU machine |
 | [`configs/envs/`](configs/envs/README.md) | pinned requirement files of the environments that produced the results | you want exact versions |
@@ -126,6 +126,7 @@ git clone https://github.com/physical-ai-robot-learning/g1-target-walking.git
 cd g1-target-walking
 python -m pip install -e ".[test]"          # numpy + pytest + Pillow: enough for the checks
 python -m analysis.verify_claims            # prints "70 claims checked, 0 failed."
+python -m analysis.verify_report            # every number of report/report_en.tex in its source file
 python -m pytest -q tests                   # no GPU, no MuJoCo
 ```
 
@@ -145,9 +146,11 @@ GPU runs' logs are not reproducible from the repository.
 ## Results
 
 `analysis/verify_claims.py` recomputes every number in this README, in
-[`report/report.md`](report/report.md) and in [`media/README.md`](media/README.md) from files in
+[`report/archive/report.md`](report/archive/report.md) and in [`media/README.md`](media/README.md) from files in
 the repository (checkpoint pickles read without JAX, metrics JSONL, rollout JSON, cognition
 JSON, MP4/GIF frame counts, the CPU re-measurements) and exits non-zero on any mismatch.
+`analysis/verify_report.py` checks that every number printed in the technical report
+([`report/report_en.tex`](report/report_en.tex)) appears in the repository file it was taken from.
 
 **Walking policy** (`results/checkpoints/`, `results/walk_sweep_cpu/walk_sweep.json`):
 
