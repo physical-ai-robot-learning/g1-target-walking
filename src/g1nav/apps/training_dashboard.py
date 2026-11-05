@@ -83,8 +83,7 @@ def main():
         secs = cols[2].number_input("seconds", 2.0, 10.0, 6.0, 1.0)
         if cols[3].button("▶ Roll out", type="primary"):
             with st.spinner("Rolling out current policy (renders video)…"):
-                cmd = [sys.executable,
-                       "/workspace/g1nav/code/locomotion/rollout_walk.py",
+                cmd = [sys.executable, "-m", "g1nav.locomotion.rollout_walk",
                        "--ckpt", LATEST, "--vx", str(vx), "--wz", str(wz),
                        "--seconds", str(secs), "--out", ROLLOUT_MP4]
                 # run rollout on CPU so it doesn't fight the GPU-bound PPO trainer

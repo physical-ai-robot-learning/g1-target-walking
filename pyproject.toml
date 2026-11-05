@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "g1nav"
+version = "0.2.0"
+description = "G1Nav: humanoid locomotion RL with hierarchical target navigation (Unitree G1, MuJoCo / MJX)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Jeong Hwan Lee" }]
+# Base = what the pure-Python parts need (scene generator, instructions, keyword rule, Navigator) and the
+# evidence checkers. The simulation / training stack, the dashboards and the Eagle encoder are extras below; the
+# exact versions that produced the results are recorded in configs/envs/requirements-*.txt.
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+# MuJoCo / MJX simulation, brax PPO training, closed-loop navigation, CPU re-measurements
+# (pinned as in configs/envs/requirements-gpu.txt; on a GPU install jax[cuda12]==0.5.3)
+sim = [
+    "jax==0.5.3",
+    "jaxlib==0.5.3",
+    "brax==0.14.2",
+    "flax==0.10.6",
+    "optax",
+    "distrax",
+    "mujoco==3.4.0",
+    "mujoco-mjx==3.4.0",
+    "playground==0.1.0",
+    "imageio>=2.31",
+    "imageio-ffmpeg>=0.4",
+    "pillow>=10.0",
+]
+# Streamlit dashboards (configs/envs/requirements-dashboard.txt)
+dashboard = ["streamlit>=1.30", "pandas>=2.0", "imageio>=2.31", "imageio-ffmpeg>=0.4", "pillow>=10.0"]
+# optional, logging-only GR00T N1.6 Eagle encoder (configs/envs/requirements-eagle.txt; old transformers pin, use a
+# separate environment, see docs/third_party.md)
+eagle = ["torch>=2.4", "transformers==4.51.3", "accelerate", "pillow>=10.0"]
+# claims check + tests (no GPU, no simulator)
+test = ["pytest>=7", "pillow>=10.0"]
+
+[project.urls]
+Repository = "https://github.com/physical-ai-robot-learning/g1-target-walking"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]

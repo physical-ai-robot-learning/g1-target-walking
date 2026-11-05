@@ -20,8 +20,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, asdict
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-G1_DIR = os.path.join(ROOT, "assets", "mujoco_menagerie", "unitree_g1")
+from g1nav.paths import ASSETS_DIR, G1_DIR as _G1_DIR
+G1_DIR = str(_G1_DIR)
 G1_XML = os.path.join(G1_DIR, "g1.xml")
 
 # ---- object palette -------------------------------------------------------
@@ -290,7 +290,7 @@ if __name__ == "__main__":
         print(f"    {o.label:18s} @ ({o.x:+.2f},{o.y:+.2f})")
 
     xml = build_mjcf(scene)
-    out = args.out or os.path.join(ROOT, "assets", f"scene_seed{args.seed}.xml")
+    out = args.out or os.path.join(str(ASSETS_DIR), f"scene_seed{args.seed}.xml")
     # The written file stores meshdir relative to its own directory (MuJoCo resolves a
     # relative meshdir against the model file when loaded with from_xml_path), so no
     # machine-specific absolute path ends up in the scene file. build_mjcf() itself keeps

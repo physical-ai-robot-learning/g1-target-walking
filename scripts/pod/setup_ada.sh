@@ -2,10 +2,11 @@
 # Lean setup for a fresh RunPod RTX 6000 Ada pod — WALKING TRAINING ONLY.
 # Skips the 6.5GB GR00T download (VLM cognition is already done & verified).
 # Same EXACT version pins + cuSolver-fix CUDA libs we hardened on H100.
-#   bash /workspace/setup_ada.sh 2>&1 | tee /workspace/setup.log
+#   bash scripts/pod/setup_ada.sh 2>&1 | tee setup.log      (G1NAV_WORKSPACE, default /workspace)
 set -u
+WS="${G1NAV_WORKSPACE:-/workspace}"
 export DEBIAN_FRONTEND=noninteractive
-VENV=/workspace/venv
+VENV="$WS/venv"
 
 echo "===== [1/4] apt: render + tmux ====="
 apt-get update -qq

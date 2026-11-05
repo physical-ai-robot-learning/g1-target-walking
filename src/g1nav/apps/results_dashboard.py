@@ -24,8 +24,8 @@ HOME = os.path.expanduser("~")
 DATA_DIR = os.environ.get("G1NAV_DATA", os.path.join(HOME, "Desktop", "g1nav_dash"))
 VIDEO_DIR = os.environ.get("G1NAV_VIDEOS", os.path.join(HOME, "g1nav", "videos"))
 # fall back to the artifacts committed in this repository (videos/, checkpoint/)
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-REPO_DIRS = (os.path.join(REPO, "videos"), os.path.join(REPO, "checkpoint"))
+from g1nav.paths import CHECKPOINT_DIR, MEDIA_DIR
+REPO_DIRS = (str(MEDIA_DIR), str(CHECKPOINT_DIR))
 DIRS = [d for d in (DATA_DIR, VIDEO_DIR) + REPO_DIRS if os.path.isdir(d)]
 
 

@@ -21,16 +21,16 @@ GOLDEN = os.path.join(ROOT, "tests", "golden", "apps.json")
 REGEN = os.environ.get("G1NAV_REGEN_GOLDEN") == "1"
 
 APPS = {
-    "results": "code/apps/app_results.py",
-    "interactive": "code/apps/app_interactive.py",
-    "train": "code/locomotion/app_train.py",
+    "results": "src/g1nav/apps/results_dashboard.py",
+    "interactive": "src/g1nav/apps/interactive_dashboard.py",
+    "train": "src/g1nav/apps/training_dashboard.py",
 }
 # environment for a deterministic first render: no external artifact folders, the committed training run
 ENV = {"G1NAV_DATA": "/nonexistent/g1nav_dash", "G1NAV_VIDEOS": "/nonexistent/g1nav_videos",
        "G1NAV_MODE": "remote", "G1NAV_POD_HOST": "root@example-host", "G1NAV_POD_PORT": "22",
-       "WALK_OUT": os.path.join(ROOT, "checkpoint", "walk_t4")}
+       "WALK_OUT": os.path.join(ROOT, "results", "checkpoints", "walk_t4")}
 # repository folders that moved in the 2026-11 refactor (old -> new), applied to the rendered text
-PATH_MOVES = {}
+PATH_MOVES = {"videos": "media", "checkpoint": os.path.join("results", "checkpoints")}
 
 
 def _texts(at):

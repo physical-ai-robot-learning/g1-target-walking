@@ -128,9 +128,7 @@ def sample_instruction(scene, rng) -> Instruction:
 
 
 if __name__ == "__main__":
-    import sys, os
-    sys.path.insert(0, os.path.dirname(__file__))
-    from scene_gen import sample_scene
+    from g1nav.envs.scene_gen import sample_scene
 
     for seed in range(6):
         scene = sample_scene(seed)

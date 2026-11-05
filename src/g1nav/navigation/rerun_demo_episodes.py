@@ -24,7 +24,9 @@ import re
 import subprocess
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+from g1nav.paths import LATEST_CHECKPOINT, MEDIA_DIR, REPO_ROOT, RESULTS_DIR
+
+ROOT = str(REPO_ROOT)
 EPISODES = [
     (0, "go to the orange cylinder"),
     (1, "go to the red cube"),
@@ -41,8 +43,8 @@ def slug(instruction: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--outdir", default=os.path.join(ROOT, "results", "demo_rerun_cpu"))
-    ap.add_argument("--ckpt", default=os.path.join(ROOT, "checkpoint", "walk_t4_latest.pkl"))
+    ap.add_argument("--outdir", default=os.path.join(str(RESULTS_DIR), "demo_rerun_cpu"))
+    ap.add_argument("--ckpt", default=str(LATEST_CHECKPOINT))
     ap.add_argument("--seconds", type=float, default=12.0)
     ap.add_argument("--cpu", action="store_true", help="run the policy with JAX on CPU")
     ap.add_argument("--keep_video", action="store_true", help="keep the rendered mp4s")
@@ -51,11 +53,11 @@ def main() -> int:
 
     rows = []
     for seed, instruction in EPISODES:
-        cog_path = os.path.join(ROOT, "videos", f"seed{seed}_{slug(instruction)}.cognition.json")
+        cog_path = os.path.join(str(MEDIA_DIR), f"seed{seed}_{slug(instruction)}.cognition.json")
         with open(cog_path) as f:
             target = json.load(f)["vlm_target"]   # keyword-matched label (see grounding.py)
         vid = os.path.join(args.outdir, f"nav_seed{seed}.mp4")
-        cmd = [sys.executable, os.path.join(ROOT, "code", "navigation", "navigate.py"),
+        cmd = [sys.executable, "-m", "g1nav.navigation.navigate",
                "--ckpt", args.ckpt, "--seed", str(seed), "--target", target,
                "--seconds", str(args.seconds), "--out", vid]
         if args.cpu:

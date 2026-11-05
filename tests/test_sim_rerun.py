@@ -20,9 +20,9 @@ if os.environ.get("G1NAV_SIM_TESTS") != "1":
     pytest.skip("set G1NAV_SIM_TESTS=1 to run the simulation checks", allow_module_level=True)
 pytest.importorskip("mujoco_playground")
 
-RERUN = [sys.executable, os.path.join(ROOT, "scripts", "rerun_demo_episodes.py")]
-WALK_EVAL = [sys.executable, os.path.join(ROOT, "code", "locomotion", "walk_eval.py")]
-CKPT_LATEST = os.path.join(ROOT, "checkpoint", "walk_t4_latest.pkl")
+RERUN = [sys.executable, "-m", "g1nav.navigation.rerun_demo_episodes"]
+WALK_EVAL = [sys.executable, "-m", "g1nav.locomotion.walk_eval"]
+CKPT_LATEST = os.path.join(ROOT, "results", "checkpoints", "walk_t4_latest.pkl")
 SWEEP_JSON = os.path.join(ROOT, "results", "walk_sweep_cpu", "walk_sweep.json")
 EPISODES_JSON = os.path.join(ROOT, "results", "demo_rerun_cpu", "episodes.json")
 

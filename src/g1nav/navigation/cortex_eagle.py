@@ -19,8 +19,7 @@ import torch
 from transformers import AutoModel, AutoProcessor, AutoConfig
 from PIL import Image
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from grounding import keyword_target  # noqa: E402
+from g1nav.navigation.grounding import keyword_target  # noqa: E402
 
 EAGLE_DIR = os.environ.get("G1NAV_EAGLE", "/workspace/ckpt/eagle-n16")
 

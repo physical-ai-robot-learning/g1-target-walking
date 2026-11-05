@@ -21,7 +21,7 @@ Part of **[physical-ai-robot-learning](https://github.com/physical-ai-robot-lear
 **Claims check:** `python analysis/verify_claims.py` ([audit](docs/claims.md)) ·
 **Third-party licences:** [`docs/third_party.md`](docs/third_party.md) · **Provenance:** [`docs/provenance.md`](docs/provenance.md) · status: finished prototype, 2026-11-01
 
-![go to the orange cylinder: third-person view (left) and ego camera (right)](videos/seed0_go-to-the-orange-cylinder.gif)
+![go to the orange cylinder: third-person view (left) and ego camera (right)](media/seed0_go-to-the-orange-cylinder.gif)
 
 ## Overview
 
@@ -180,10 +180,10 @@ python -m pytest -q tests                 # no GPU, no MuJoCo
 | "go to the purple cylinder" | purple cylinder | yes | 0.54 m | 0.75 m | 668 |
 
 **"go to the red cube"**
-![go to the red cube](videos/seed1_go-to-the-red-cube.gif)
+![go to the red cube](media/seed1_go-to-the-red-cube.gif)
 
 **"go to the purple cylinder"**
-![go to the purple cylinder](videos/seed2_go-to-the-purple-cylinder.gif)
+![go to the purple cylinder](media/seed2_go-to-the-purple-cylinder.gif)
 
 Each episode also has its MP4 (50 fps), the start ego frame and the cognition JSON in
 [`videos/`](videos/VIDEOS.md). The cognition JSON stores the keyword-selected label under the

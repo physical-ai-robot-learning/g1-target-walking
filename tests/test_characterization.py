@@ -15,10 +15,10 @@ import pytest
 
 from conftest import ROOT
 
-import action_module as am
-import instructions as ins
-import navigate as nav
-import scene_gen as sg
+from g1nav.envs import instructions as ins
+from g1nav.envs import scene_gen as sg
+from g1nav.navigation import action_module as am
+from g1nav.navigation import navigate as nav
 
 GOLDEN = os.path.join(ROOT, "tests", "golden", "characterization.json")
 REGEN = os.environ.get("G1NAV_REGEN_GOLDEN") == "1"

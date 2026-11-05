@@ -1,6 +1,6 @@
 import numpy as np
 
-from action_module import (REACH_RADIUS, Navigator, ego_to_world, goal_to_command,
+from g1nav.navigation.action_module import (REACH_RADIUS, Navigator, ego_to_world, goal_to_command,
                            world_to_ego)
 
 

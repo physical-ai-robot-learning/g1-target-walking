@@ -8,3 +8,7 @@ outputs/
 # local runtime artifacts
 /tmp/
 .pytest_cache/
+*.egg-info/
+build/
+# optional third-party Eagle backbone (not redistributed)
+/assets/eagle-n16/

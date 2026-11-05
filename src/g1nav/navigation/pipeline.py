@@ -28,12 +28,7 @@ import json
 import argparse
 import subprocess
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-STU = os.path.join(ROOT, "code", "navigation")
-ENV = os.path.join(ROOT, "code", "envs")
-for p in (STU, ENV):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+from g1nav.paths import EAGLE_DIR, LATEST_CHECKPOINT, OUTPUTS_DIR
 
 
 def render_scene(seed, ego_path):
@@ -41,7 +36,7 @@ def render_scene(seed, ego_path):
     os.environ.setdefault("MUJOCO_GL", "egl")
     import mujoco
     from PIL import Image
-    import integrated_scene as isc
+    from g1nav.navigation import integrated_scene as isc
     path, scene = isc.build_integrated_xml(seed)
     m = mujoco.MjModel.from_xml_path(path)
     d = mujoco.MjData(m)
@@ -58,7 +53,7 @@ def ground_target(ego_path, instruction, labels, eagle_dir, result_path):
     have_eagle = eagle_dir and os.path.isdir(eagle_dir)
     if have_eagle:
         env = dict(os.environ, G1NAV_EAGLE=eagle_dir)
-        cmd = [sys.executable, os.path.join(STU, "cortex_eagle.py"),
+        cmd = [sys.executable, "-m", "g1nav.navigation.cortex_eagle",
                "--image", ego_path, "--instruction", instruction,
                "--labels", ",".join(labels), "--result", result_path]
         r = subprocess.run(cmd, capture_output=True, text=True, env=env)
@@ -68,7 +63,7 @@ def ground_target(ego_path, instruction, labels, eagle_dir, result_path):
             except json.JSONDecodeError:
                 pass
     # fallback: color+shape keyword overlap with the instruction (no extra ckpt)
-    from grounding import keyword_target
+    from g1nav.navigation.grounding import keyword_target
     best = keyword_target(instruction, labels)
     json.dump({"vlm_target": best, "labels": labels,
                "note": "Eagle encoder not found; used keyword grounding"},
@@ -80,10 +75,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--instruction", default="go to the orange cylinder")
-    ap.add_argument("--ckpt", default=os.path.join(ROOT, "checkpoint", "walk_t4_latest.pkl"))
-    ap.add_argument("--eagle", default=os.environ.get(
-        "G1NAV_EAGLE", os.path.join(ROOT, "checkpoint", "eagle-n16")))
-    ap.add_argument("--outdir", default=os.path.join(ROOT, "outputs"))
+    ap.add_argument("--ckpt", default=str(LATEST_CHECKPOINT))
+    ap.add_argument("--eagle", default=str(EAGLE_DIR))
+    ap.add_argument("--outdir", default=str(OUTPUTS_DIR))
     ap.add_argument("--seconds", type=float, default=14.0)
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
@@ -101,7 +95,7 @@ def main():
     print("TARGET=" + (target or "?"), flush=True)
 
     print("STAGE=navigate", flush=True)
-    cmd = [sys.executable, os.path.join(STU, "navigate.py"),
+    cmd = [sys.executable, "-m", "g1nav.navigation.navigate",
            "--ckpt", args.ckpt, "--seed", str(args.seed),
            "--target", target or labels[0], "--seconds", str(args.seconds),
            "--out", vid]

@@ -29,17 +29,17 @@ import subprocess
 
 import streamlit as st
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-RUNNER = os.path.join(ROOT, "code", "navigation", "g1nav_run.py")
+from g1nav.paths import LATEST_CHECKPOINT, REPO_ROOT
+ROOT = str(REPO_ROOT)
 
 # remote config (only used in REMOTE mode)
 HOST = os.environ.get("G1NAV_POD_HOST", "root@your-gpu-host")
 PORT = os.environ.get("G1NAV_POD_PORT", "22")
 KEY = os.path.expanduser(os.environ.get("G1NAV_POD_KEY", "~/.ssh/id_ed25519"))
-PREVIEW_REMOTE = "/workspace/code/navigation/preview_scene.sh"
-RUN_REMOTE = "/workspace/code/navigation/run_pipeline_n16.sh"
-PREVIEW_LOCAL_SH = os.path.join(ROOT, "code", "navigation", "preview_scene.sh")
-RUN_LOCAL_SH = os.path.join(ROOT, "code", "navigation", "run_pipeline_n16.sh")
+PREVIEW_REMOTE = "/workspace/scripts/pod/preview_scene.sh"
+RUN_REMOTE = "/workspace/scripts/pod/run_pipeline_n16.sh"
+PREVIEW_LOCAL_SH = os.path.join(ROOT, "scripts", "pod", "preview_scene.sh")
+RUN_LOCAL_SH = os.path.join(ROOT, "scripts", "pod", "run_pipeline_n16.sh")
 SSH = ["ssh", "-p", PORT, "-i", KEY, "-o", "StrictHostKeyChecking=no",
        "-o", "ConnectTimeout=20", "-o", "BatchMode=yes"]
 SCP = ["scp", "-P", PORT, "-i", KEY, "-o", "StrictHostKeyChecking=no",
@@ -58,7 +58,7 @@ def detect_mode():
         has_gpu = any(d.platform == "gpu" for d in _jax.devices())
     except Exception:  # noqa: BLE001
         has_gpu = False
-    has_ckpt = os.path.exists(os.path.join(ROOT, "checkpoint", "walk_t4_latest.pkl"))
+    has_ckpt = os.path.exists(LATEST_CHECKPOINT)
     return "local" if (has_gpu and has_ckpt) else "remote"
 
 
@@ -72,10 +72,7 @@ def grab(out, key):
 
 # ───────────────────────────── LOCAL backend ──────────────────────────────
 def local_preview(seed):
-    import sys
-    sys.path.insert(0, os.path.join(ROOT, "code", "navigation"))
-    sys.path.insert(0, os.path.join(ROOT, "code", "envs"))
-    import g1nav_run
+    from g1nav.navigation import pipeline as g1nav_run
     outdir = os.path.join(ROOT, "outputs")
     os.makedirs(outdir, exist_ok=True)
     ego = os.path.join(outdir, f"ego_seed{seed}.png")
@@ -84,7 +81,7 @@ def local_preview(seed):
 
 
 def local_run(seed, instruction):
-    cmd = ["python", RUNNER, "--seed", str(int(seed)), "--instruction", instruction]
+    cmd = ["python", "-m", "g1nav.navigation.pipeline", "--seed", str(int(seed)), "--instruction", instruction]
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT, timeout=900)
     out = r.stdout + "\n" + r.stderr
     vid = grab(out, "VIDEO")
@@ -99,7 +96,7 @@ def ssh_run(cmd, timeout=900):
 
 
 def push(local, remote):
-    subprocess.run(SSH + [HOST, "mkdir -p /workspace/code/navigation"],
+    subprocess.run(SSH + [HOST, "mkdir -p /workspace/scripts/pod"],
                    capture_output=True, text=True, timeout=30)
     subprocess.run(SCP + [local, f"{HOST}:{remote}"], capture_output=True, text=True, timeout=60)
 

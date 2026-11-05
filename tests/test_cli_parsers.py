@@ -22,18 +22,19 @@ from conftest import ROOT
 GOLDEN = os.path.join(ROOT, "tests", "golden", "cli_parsers.json")
 REGEN = os.environ.get("G1NAV_REGEN_GOLDEN") == "1"
 
-# name -> script path (relative to the repository root)
+# name (as recorded in the golden file) -> module, run as `python -m <module>`
 ENTRY_POINTS = {
-    "scene_gen": "code/envs/scene_gen.py",
-    "navigate": "code/navigation/navigate.py",
-    "g1nav_run": "code/navigation/g1nav_run.py",
-    "cortex_eagle": "code/navigation/cortex_eagle.py",
-    "train_walk": "code/locomotion/train_walk.py",
-    "rollout_walk": "code/locomotion/rollout_walk.py",
-    "rerun_demo_episodes": "scripts/rerun_demo_episodes.py",
+    "scene_gen": "g1nav.envs.scene_gen",
+    "navigate": "g1nav.navigation.navigate",
+    "g1nav_run": "g1nav.navigation.pipeline",
+    "cortex_eagle": "g1nav.navigation.cortex_eagle",
+    "train_walk": "g1nav.locomotion.train_walk",
+    "rollout_walk": "g1nav.locomotion.rollout_walk",
+    "rerun_demo_episodes": "g1nav.navigation.rerun_demo_episodes",
 }
 # repository paths that moved in the 2026-11 refactor (old prefix -> new prefix)
-PATH_MOVES = {}
+PATH_MOVES = {"<repo>/checkpoint/eagle-n16": "<repo>/assets/eagle-n16",
+              "<repo>/checkpoint/": "<repo>/results/checkpoints/"}
 
 
 class _Captured(Exception):
@@ -79,8 +80,9 @@ def _capture(name, monkeypatch):
 
     monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse)
     monkeypatch.setattr(sys, "argv", [name])
+    monkeypatch.delitem(sys.modules, ENTRY_POINTS[name], raising=False)
     with pytest.raises(_Captured) as exc:
-        runpy.run_path(os.path.join(ROOT, ENTRY_POINTS[name]), run_name="__main__")
+        runpy.run_module(ENTRY_POINTS[name], run_name="__main__", alter_sys=True)
     return json.loads(json.dumps(_spec(exc.value.parser)))
 
 

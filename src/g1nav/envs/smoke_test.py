@@ -8,8 +8,8 @@ import sys
 import numpy as np
 import mujoco
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCENE = os.path.join(ROOT, "assets", "mujoco_menagerie", "unitree_g1", "scene.xml")
+from g1nav.paths import ASSETS_DIR, G1_DIR
+SCENE = os.path.join(str(G1_DIR), "scene.xml")
 
 
 def main():
@@ -43,7 +43,7 @@ def main():
         renderer = mujoco.Renderer(model, height=240, width=320)
         renderer.update_scene(data)
         img = renderer.render()
-        out = os.path.join(ROOT, "assets", "smoke_frame.png")
+        out = os.path.join(str(ASSETS_DIR), "smoke_frame.png")
         try:
             import imageio.v2 as imageio
             imageio.imwrite(out, img)

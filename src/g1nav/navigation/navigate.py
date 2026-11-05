@@ -59,17 +59,13 @@ def main():
     if args.cpu:
         os.environ["JAX_PLATFORMS"] = "cpu"   # must be set BEFORE importing jax
 
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "envs"))
-
     import jax
     import mujoco
     from mujoco_playground.config import locomotion_params
     from brax.training.agents.ppo import networks as ppo_networks
     from brax.training.acme import running_statistics
-    import integrated_scene as isc
-    from action_module import Navigator
+    from g1nav.navigation import integrated_scene as isc
+    from g1nav.navigation.action_module import Navigator
 
     ENV = "G1JoystickFlatTerrain"
     # Avoid registry.load(ENV): it puts an MJX model on the GPU (clashes with a

@@ -4,8 +4,8 @@ Each claim recomputes a value from files committed in this repository and checks
 that the documents state exactly that value (as a literal text snippet). Needs
 only numpy and Pillow; no JAX, brax, MuJoCo or GPU.
 
-    python analysis/verify_claims.py                 # exit 1 on any failure
-    python analysis/verify_claims.py --md out.md     # also write a per-claim table
+    python -m analysis.verify_claims                 # exit 1 on any failure (needs `pip install -e .`)
+    python -m analysis.verify_claims --md out.md     # also write a per-claim table
 """
 from __future__ import annotations
 
@@ -18,13 +18,12 @@ import re
 import sys
 from typing import Callable, List, Sequence, Tuple
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from analysis import evidence as ev  # noqa: E402
+from analysis import evidence as ev
 
 ROOT = ev.ROOT
 README = "README.md"
-REPORT = "docs/report.md"
-VIDEOS = "videos/VIDEOS.md"
+REPORT = "report/report.md"
+VIDEOS = "media/README.md"
 
 
 def _read(rel: str) -> str:
@@ -67,7 +66,7 @@ BEST = max(SWEEP.values(), key=lambda r: r["fwd_vel"])
 COG = {s: ev.cognition(s, i) for s, i in ev.DEMO_EPISODES}
 FRAMES = {s: ev.mp4_frame_count(os.path.join(ev.VIDEO_DIR, ev.demo_prefix(s, i) + ".mp4"))
           for s, i in ev.DEMO_EPISODES}
-REACH = _const("code/navigation/action_module.py", "REACH_RADIUS")
+REACH = _const("src/g1nav/navigation/action_module.py", "REACH_RADIUS")
 
 
 def m(step: int) -> str:
@@ -80,14 +79,12 @@ def _sha(path: str) -> str:
 
 
 def _scene_labels(seed: int) -> List[str]:
-    sys.path.insert(0, os.path.join(ROOT, "code", "envs"))
-    from scene_gen import sample_scene  # pure numpy
+    from g1nav.envs.scene_gen import sample_scene  # pure numpy
     return [o.label for o in sample_scene(seed).objects]
 
 
 def _keyword_target(instruction: str, labels: Sequence[str]) -> str:
-    sys.path.insert(0, os.path.join(ROOT, "code", "navigation"))
-    from grounding import keyword_target
+    from g1nav.navigation.grounding import keyword_target
     return keyword_target(instruction, labels)
 
 
@@ -107,7 +104,7 @@ claim("steps_final_README", [README], "154,828,800",
       lambda: CK["step"] == 154_828_800 == FINAL["step"])
 claim("steps_final_M", [README, REPORT], f"{CK['step'] / 1e6:.1f} M")
 claim("ckpt_latest_equals_last", [REPORT], "byte-identical to `walk_t4_step0154828800.pkl`",
-      lambda: _sha("checkpoint/walk_t4_latest.pkl") == _sha("checkpoint/walk_t4_step0154828800.pkl"))
+      lambda: _sha("results/checkpoints/walk_t4_latest.pkl") == _sha("results/checkpoints/walk_t4_step0154828800.pkl"))
 claim("n_checkpoints", [README], f"all {len(ev.checkpoint_steps())} saved checkpoints",
       lambda: len(ev.checkpoint_steps()) == len(SWEEP) == len(METRICS))
 claim("ckpt_spacing", [REPORT], f"{ev.checkpoint_steps()[1]:,} steps",
@@ -124,7 +121,7 @@ claim("throughput_steady_window", [REPORT],
       f"{FINAL['elapsed_min'] - METRICS[1]['elapsed_min']:.1f} min")
 claim("throughput_total", [REPORT], f"about {FINAL['step'] / FINAL['elapsed_min'] / 1e6:.1f} M steps/min")
 claim("num_envs_default", [README, REPORT], "--num_envs 8192",
-      lambda: _argparse_default("code/locomotion/train_walk.py", "--num_envs") == 8192)
+      lambda: _argparse_default("src/g1nav/locomotion/train_walk.py", "--num_envs") == 8192)
 for row_step in (0, 10321920, 30965760, 41287680, 61931520, 144506880):
     r = SWEEP[row_step]
     rew = next(x["reward"] for x in METRICS if x["step"] == row_step)
@@ -156,7 +153,7 @@ claim("final_fwd_sweep", [README],
 claim("final_fwd_pct", [README], f"({_fr['fwd_vel'] / 0.6 * 100:.0f} %)",
       lambda: f"{ROLL['fwd_vel'] / 0.6 * 100:.0f}" == f"{_fr['fwd_vel'] / 0.6 * 100:.0f}")
 claim("final_min_torso_5s", [README], f"minimum torso height of {_fr['min_z']:.2f} m over 5 s",
-      lambda: _const("code/locomotion/walk_eval.py", "N") == 250 and _const("code/locomotion/walk_eval.py", "VX") == 0.6)
+      lambda: _const("src/g1nav/locomotion/walk_eval.py", "N") == 250 and _const("src/g1nav/locomotion/walk_eval.py", "VX") == 0.6)
 claim("rollout_4s", [README], f"{ROLL['fwd_vel']:.3f} m/s, {ROLL['x_travel']:.2f} m, min torso {ROLL['min_z']:.3f} m",
       lambda: ROLL["step"] == CK["step"])
 claim("rollout_4s_report", [REPORT],
@@ -176,11 +173,11 @@ claim("privileged_dim", [README], f"{val[0][0]}-D privileged state")
 claim("normaliser", [REPORT], "running\nobservation normaliser is stored as `params[0]`",
       lambda: "mean" in CK["normalizer_keys"] and "std" in CK["normalizer_keys"])
 claim("ctrl_50hz", [README], "50 Hz",
-      lambda: abs(1 / 0.02 - 50) < 1e-9 and "ctrl_dt = 0.02" in _read("code/navigation/navigate.py"))
+      lambda: abs(1 / 0.02 - 50) < 1e-9 and "ctrl_dt = 0.02" in _read("src/g1nav/navigation/navigate.py"))
 claim("physics_500hz", [README], "500 Hz (10 substeps per control step)",
-      lambda: "SIM_DT = 0.002" in _read("code/navigation/navigate.py"))
+      lambda: "SIM_DT = 0.002" in _read("src/g1nav/navigation/navigate.py"))
 claim("action_scale", [README], "`motor_target = default_pose + 0.5 · action`",
-      lambda: "action_scale = 0.5" in _read("code/navigation/navigate.py"))
+      lambda: "action_scale = 0.5" in _read("src/g1nav/navigation/navigate.py"))
 claim("reach_radius", [README, REPORT, VIDEOS], f"{REACH:.2f} m")
 
 # closed loop
@@ -202,7 +199,7 @@ for seed, instr in ev.DEMO_EPISODES:
     claim(f"frames_seed{seed}", [README], f"{FRAMES[seed]}",
           lambda s=seed, r=r: abs(FRAMES[s] - r["frames"]) <= 1
           and FRAMES[s] - 2 * ev.HOLD_FRAMES <= 12 * ev.CTRL_HZ)
-    claim(f"gif_seed{seed}", [README], f"videos/{ev.demo_prefix(seed, instr)}.gif",
+    claim(f"gif_seed{seed}", [README], f"media/{ev.demo_prefix(seed, instr)}.gif",
           lambda s=seed, i=instr: ev.gif_frame_count(
               os.path.join(ev.VIDEO_DIR, ev.demo_prefix(s, i) + ".gif")) > 1)
 dists = " / ".join(f"{RERUN[s]['final_dist_m']:.2f}" for s, _ in ev.DEMO_EPISODES)
@@ -219,9 +216,9 @@ claim("eagle_dims", [README, REPORT, VIDEOS],
 claim("stage3_note", [VIDEOS], "localize: object bearing + distance via color/shape CV + ego-depth",
       lambda: all("CV + ego-depth" in c["stages"]["3"] for c in COG.values()))
 claim("use_vlm_unused", [README, REPORT], "--use_vlm",
-      lambda: "args.use_vlm" not in _read("code/navigation/navigate.py"))
+      lambda: "args.use_vlm" not in _read("src/g1nav/navigation/navigate.py"))
 claim("gt_target_position", [README, REPORT], "ground truth",
-      lambda: "goal_world = (tobj.x, tobj.y)" in _read("code/navigation/navigate.py"))
+      lambda: "goal_world = (tobj.x, tobj.y)" in _read("src/g1nav/navigation/navigate.py"))
 
 
 def main() -> int:

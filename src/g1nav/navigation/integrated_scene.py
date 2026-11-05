@@ -20,9 +20,7 @@ _PG = os.path.dirname(mujoco_playground.__file__)
 G1_XML_DIR = os.path.join(_PG, "_src", "locomotion", "g1", "xmls")
 BASE_SCENE = os.path.join(G1_XML_DIR, "scene_mjx_feetonly_flat_terrain.xml")
 
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "envs"))
-from scene_gen import sample_scene, COLORS, SHAPES  # noqa: E402
+from g1nav.envs.scene_gen import sample_scene, COLORS, SHAPES  # noqa: E402
 
 
 def _ego_camera():

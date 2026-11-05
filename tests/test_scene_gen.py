@@ -1,6 +1,6 @@
 import pytest
 
-from scene_gen import sample_scene
+from g1nav.envs.scene_gen import sample_scene
 from analysis import evidence as ev
 
 

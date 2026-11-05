@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CKPT_DIR = os.path.join(ROOT, "checkpoint")
-VIDEO_DIR = os.path.join(ROOT, "videos")
+CKPT_DIR = os.path.join(ROOT, "results", "checkpoints")
+VIDEO_DIR = os.path.join(ROOT, "media")
 RERUN_JSON = os.path.join(ROOT, "results", "demo_rerun_cpu", "episodes.json")
 SWEEP_JSON = os.path.join(ROOT, "results", "walk_sweep_cpu", "walk_sweep.json")
 
@@ -29,8 +29,8 @@ DEMO_EPISODES = [
     (1, "go to the red cube"),
     (2, "go to the purple cylinder"),
 ]
-REACH_RADIUS_M = 0.55      # code/navigation/action_module.py
-CTRL_HZ = 50               # ctrl_dt = 0.02 s (code/navigation/navigate.py)
+REACH_RADIUS_M = 0.55      # src/g1nav/navigation/action_module.py
+CTRL_HZ = 50               # CTRL_DT = 0.02 s (src/g1nav/navigation/navigate.py)
 HOLD_FRAMES = 100          # 2 s standing before and after (navigate.py HOLD)
 
 

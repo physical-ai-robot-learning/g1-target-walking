@@ -2,7 +2,8 @@
 # Bootstrap the RunPod RTX 6000 Ada pod for G1Nav.
 # Idempotent-ish: safe to re-run. Logs to /workspace/bootstrap.log
 set -u
-LOG=/workspace/bootstrap.log
+WS="${G1NAV_WORKSPACE:-/workspace}"
+LOG="$WS/bootstrap.log"
 exec > >(tee -a "$LOG") 2>&1
 echo "===== bootstrap start $(date -u) ====="
 
@@ -10,7 +11,7 @@ export DEBIAN_FRONTEND=noninteractive
 export MUJOCO_GL=egl
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 
-cd /workspace || exit 1
+cd "$WS" || exit 1
 
 echo "--- apt: system libs for EGL/GL offscreen render + git-lfs ---"
 apt-get update -qq
@@ -20,7 +21,7 @@ echo "apt done"
 
 # Ubuntu 24.04 is PEP-668 externally-managed. Use a dedicated venv that
 # inherits the system torch (which already has CUDA 12.8) via system-site-packages.
-VENV=/workspace/venv
+VENV="$WS/venv"
 if [ ! -d "$VENV" ]; then
   echo "--- creating venv with system site packages (keeps system torch+cuda) ---"
   python3 -m venv --system-site-packages "$VENV"
