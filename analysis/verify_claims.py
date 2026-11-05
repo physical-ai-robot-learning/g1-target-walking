@@ -1,4 +1,4 @@
-"""Check every number stated in README.md, docs/report.md and videos/VIDEOS.md.
+"""Check every number stated in README.md, report/report.md and media/README.md.
 
 Each claim recomputes a value from files committed in this repository and checks
 that the documents state exactly that value (as a literal text snippet). Needs
@@ -79,13 +79,13 @@ def _sha(path: str) -> str:
 
 
 def _scene_labels(seed: int) -> List[str]:
-    from g1nav.envs.scene_gen import sample_scene  # pure numpy
-    return [o.label for o in sample_scene(seed).objects]
+    from g1nav.envs.scene_gen import sampleScene  # pure numpy
+    return [o.label for o in sampleScene(seed).mObjects]
 
 
 def _keyword_target(instruction: str, labels: Sequence[str]) -> str:
-    from g1nav.navigation.grounding import keyword_target
-    return keyword_target(instruction, labels)
+    from g1nav.navigation.grounding import keywordTarget
+    return keywordTarget(instruction, labels)
 
 
 # ------------------------------------------------------------------ claims
@@ -153,7 +153,7 @@ claim("final_fwd_sweep", [README],
 claim("final_fwd_pct", [README], f"({_fr['fwd_vel'] / 0.6 * 100:.0f} %)",
       lambda: f"{ROLL['fwd_vel'] / 0.6 * 100:.0f}" == f"{_fr['fwd_vel'] / 0.6 * 100:.0f}")
 claim("final_min_torso_5s", [README], f"minimum torso height of {_fr['min_z']:.2f} m over 5 s",
-      lambda: _const("src/g1nav/locomotion/walk_eval.py", "N") == 250 and _const("src/g1nav/locomotion/walk_eval.py", "VX") == 0.6)
+      lambda: _const("src/g1nav/locomotion/walk_eval.py", "N_STEPS") == 250 and _const("src/g1nav/locomotion/walk_eval.py", "VX") == 0.6)
 claim("rollout_4s", [README], f"{ROLL['fwd_vel']:.3f} m/s, {ROLL['x_travel']:.2f} m, min torso {ROLL['min_z']:.3f} m",
       lambda: ROLL["step"] == CK["step"])
 claim("rollout_4s_report", [REPORT],
@@ -173,11 +173,11 @@ claim("privileged_dim", [README], f"{val[0][0]}-D privileged state")
 claim("normaliser", [REPORT], "running\nobservation normaliser is stored as `params[0]`",
       lambda: "mean" in CK["normalizer_keys"] and "std" in CK["normalizer_keys"])
 claim("ctrl_50hz", [README], "50 Hz",
-      lambda: abs(1 / 0.02 - 50) < 1e-9 and "ctrl_dt = 0.02" in _read("src/g1nav/navigation/navigate.py"))
+      lambda: abs(1 / 0.02 - 50) < 1e-9 and "CTRL_DT = 0.02" in _read("src/g1nav/navigation/navigate.py"))
 claim("physics_500hz", [README], "500 Hz (10 substeps per control step)",
       lambda: "SIM_DT = 0.002" in _read("src/g1nav/navigation/navigate.py"))
 claim("action_scale", [README], "`motor_target = default_pose + 0.5 · action`",
-      lambda: "action_scale = 0.5" in _read("src/g1nav/navigation/navigate.py"))
+      lambda: "ACTION_SCALE = 0.5" in _read("src/g1nav/navigation/navigate.py"))
 claim("reach_radius", [README, REPORT, VIDEOS], f"{REACH:.2f} m")
 
 # closed loop
@@ -216,9 +216,9 @@ claim("eagle_dims", [README, REPORT, VIDEOS],
 claim("stage3_note", [VIDEOS], "localize: object bearing + distance via color/shape CV + ego-depth",
       lambda: all("CV + ego-depth" in c["stages"]["3"] for c in COG.values()))
 claim("use_vlm_unused", [README, REPORT], "--use_vlm",
-      lambda: "args.use_vlm" not in _read("src/g1nav/navigation/navigate.py"))
+      lambda: ".use_vlm" not in _read("src/g1nav/navigation/navigate.py"))
 claim("gt_target_position", [README, REPORT], "ground truth",
-      lambda: "goal_world = (tobj.x, tobj.y)" in _read("src/g1nav/navigation/navigate.py"))
+      lambda: "tGoalWorld = (tTarget.mX, tTarget.mY)" in _read("src/g1nav/navigation/navigate.py"))
 
 
 def main() -> int:

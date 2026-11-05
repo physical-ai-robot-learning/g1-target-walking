@@ -1,114 +1,94 @@
-"""Build an integrated MJCF: the mujoco_playground G1 (whose model EXACTLY matches
-the trained PPO policy's obs/action) + our colored objects + ego & third-person
-cameras. This lets us run the trained walking policy in a navigation scene.
+"""Integrated MJCF for the closed loop: the MuJoCo Playground G1 + the seeded scene's objects, walls and cameras.
 
-We start from playground's scene_mjx_feetonly.xml (the base scene that g1 includes)
-and inject: an ego camera on the torso, a high overview camera, the colored
-objects, and arena walls — then set the robot spawn via the 'home' keyframe.
+The Playground G1 model is the one the PPO policy was trained on, so its observation/action layout matches the
+checkpoint exactly. Starting from Playground's scene_mjx_feetonly_flat_terrain.xml this injects an ego camera on
+the torso (in a patched copy of the included g1_mjx_feetonly.xml), the third-person overview camera, the arena
+walls and the coloured objects, and sets the robot spawn in the 'home' keyframe. The layout comes from
+envs.scene_gen.sampleScene, so seeds match the dashboards and the recorded demos.
 
-Object layout reuses scene_gen.sample_scene so seeds match the dashboards.
+Input: a seed. Output: an MJCF file written into the installed Playground G1 xml folder (so its relative
+meshdir/include paths resolve) and the SceneSpec. Needs `mujoco_playground` (imported when called).
+
+    python -m g1nav.navigation.integrated_scene      # build and validate seeds 0 and 1
 """
 from __future__ import annotations
 
 import os
 import xml.etree.ElementTree as ET
-import numpy as np
 
-# locate the installed mujoco_playground G1 xmls on the pod
-import mujoco_playground
-_PG = os.path.dirname(mujoco_playground.__file__)
-G1_XML_DIR = os.path.join(_PG, "_src", "locomotion", "g1", "xmls")
-BASE_SCENE = os.path.join(G1_XML_DIR, "scene_mjx_feetonly_flat_terrain.xml")
+from g1nav.envs.scene_gen import (EGO_CAMERA_XML, SceneSpec, objectGeomXml, sampleScene, spawnQpos,
+                                  thirdPersonCameraXml, wallGeomXmls)
 
-from g1nav.envs.scene_gen import sample_scene, COLORS, SHAPES  # noqa: E402
-
-
-def _ego_camera():
-    return ('<camera name="ego" mode="fixed" pos="0.08 0 0.55" '
-            'xyaxes="0 -1 0 0.22 0 1" fovy="95"/>')
+BASE_SCENE_FILE = "scene_mjx_feetonly_flat_terrain.xml"
+G1_BODY_INCLUDE = "g1_mjx_feetonly"       # the included robot file that holds torso_link
+SPAWN_KEYFRAME = "home"
+VALIDATE_SEEDS = (0, 1)
 
 
-def build_integrated_xml(seed: int, out_path: str = None) -> tuple:
-    """Return (xml_path, scene). Writes an integrated MJCF for the given seed."""
-    scene = sample_scene(seed)
-    tree = ET.parse(BASE_SCENE)
-    root = tree.getroot()
+def playgroundG1XmlDir() -> str:
+    """Folder of the installed mujoco_playground G1 XML files."""
+    import mujoco_playground
+    return os.path.join(os.path.dirname(mujoco_playground.__file__), "_src", "locomotion", "g1", "xmls")
 
-    # The G1 body lives in an INCLUDED file (g1_mjx_feetonly.xml), not this scene,
-    # so ET can't see torso_link here. Make a patched copy of the g1 body file
-    # with the ego camera added onto torso_link, and point the include at it.
-    for inc in root.iter("include"):
-        f = inc.get("file")
-        if f and "g1_mjx_feetonly" in f and "restricted" not in f:
-            g1_src = f if os.path.isabs(f) else os.path.join(G1_XML_DIR, f)
-            g1_tree = ET.parse(g1_src)
-            for body in g1_tree.iter("body"):
-                if body.get("name") == "torso_link":
-                    body.append(ET.fromstring(_ego_camera()))
+
+def buildIntegratedXml(seed: int, outPath: str | None = None) -> tuple[str, SceneSpec]:
+    """Write the integrated MJCF for `seed`; return (xml_path, scene)."""
+    tScene = sampleScene(seed)
+    tXmlDir = playgroundG1XmlDir()
+    tTree = ET.parse(os.path.join(tXmlDir, BASE_SCENE_FILE))
+    tRoot = tTree.getroot()
+
+    # The G1 body lives in an INCLUDED file (g1_mjx_feetonly.xml), not in this scene, so ElementTree cannot see
+    # torso_link here. Write a patched copy of the body file with the ego camera on torso_link and point the
+    # include at it.
+    for tInclude in tRoot.iter("include"):
+        tFile = tInclude.get("file")
+        if tFile and G1_BODY_INCLUDE in tFile and "restricted" not in tFile:
+            tSource = tFile if os.path.isabs(tFile) else os.path.join(tXmlDir, tFile)
+            tBodyTree = ET.parse(tSource)
+            for tBody in tBodyTree.iter("body"):
+                if tBody.get("name") == "torso_link":
+                    tBody.append(ET.fromstring(EGO_CAMERA_XML))
                     break
-            patched = os.path.join(G1_XML_DIR, f"_g1_ego_{seed}.xml")
-            g1_tree.write(patched)
-            inc.set("file", patched)
+            tPatched = os.path.join(tXmlDir, f"_g1_ego_{seed}.xml")
+            tBodyTree.write(tPatched)
+            tInclude.set("file", tPatched)
 
-    # 1) robot spawn via the 'home' keyframe qpos[:7] = x,y,z,qw,qx,qy,qz
-    import math
-    for key in root.iter("key"):
-        if key.get("name") != "home":
+    # robot spawn via the 'home' keyframe qpos[:7] = x, y, z, qw, qx, qy, qz
+    for tKey in tRoot.iter("key"):
+        if tKey.get("name") != SPAWN_KEYFRAME:
             continue
-        vals = key.get("qpos").split()
-        z = vals[2]
-        hy = scene.robot_yaw / 2.0
-        vals[0] = f"{scene.robot_x:.4f}"; vals[1] = f"{scene.robot_y:.4f}"; vals[2] = z
-        vals[3] = f"{math.cos(hy):.5f}"; vals[4] = "0"; vals[5] = "0"; vals[6] = f"{math.sin(hy):.5f}"
-        key.set("qpos", " ".join(vals))
+        tKey.set("qpos", spawnQpos(tKey.get("qpos"), tScene))
         break
 
-    wb = root.find("worldbody")
+    tWorldbody = tRoot.find("worldbody")
+    tWorldbody.append(ET.fromstring(thirdPersonCameraXml(tScene.mArenaHalf)))
+    for tWallXml in wallGeomXmls(tScene.mArenaHalf):
+        tWorldbody.append(ET.fromstring(tWallXml))
+    for tIndex, tObj in enumerate(tScene.mObjects):
+        tWorldbody.append(ET.fromstring(objectGeomXml(tIndex, tObj)))
 
-    # (ego camera was injected into the included g1 body file above)
+    # write INTO the Playground xml folder so all relative meshdir/include paths (assets/*.STL, sensor.xml,
+    # g1_mjx_feetonly.xml) resolve
+    tOutPath = outPath or os.path.join(tXmlDir, f"_integrated_{seed}.xml")
+    tTree.write(tOutPath)
+    return tOutPath, tScene
 
-    # 3) third-person overview camera (whole arena)
-    h = scene.arena_half
-    wb.append(ET.fromstring(
-        f'<camera name="thirdperson" mode="fixed" '
-        f'pos="0 {-(h + 4.0):.2f} {h + 4.5:.2f}" '
-        f'xyaxes="1 0 0 0 0.66 0.75" fovy="55"/>'))
 
-    # 4) arena walls
-    wall_h = 0.3
-    for i, (cx, cy, sx, sy) in enumerate([
-            (0, h, h, 0.05), (0, -h, h, 0.05), (h, 0, 0.05, h), (-h, 0, 0.05, h)]):
-        wb.append(ET.fromstring(
-            f'<geom name="wall_{i}" type="box" pos="{cx} {cy} {wall_h/2}" '
-            f'size="{sx} {sy} {wall_h/2}" rgba="0.5 0.5 0.55 1" '
-            f'contype="1" conaffinity="1"/>'))
-
-    # 5) colored objects (static, no freejoint)
-    for i, o in enumerate(scene.objects):
-        gtype, size, _ = SHAPES[o.shape]
-        size_str = " ".join(str(s) for s in size if s > 0) or "0.05"
-        rgba = " ".join(str(c) for c in COLORS[o.color])
-        wb.append(ET.fromstring(
-            f'<geom name="obj_{i}_{o.color}_{o.shape}" type="{gtype}" '
-            f'pos="{o.x} {o.y} {o.z}" size="{size_str}" rgba="{rgba}" '
-            f'contype="1" conaffinity="1"/>'))
-
-    # write INTO the playground xml dir so all relative meshdir/include paths
-    # (assets/*.STL, sensor.xml, g1_mjx_feetonly.xml) resolve correctly.
-    out_path = out_path or os.path.join(G1_XML_DIR, f"_integrated_{seed}.xml")
-    tree.write(out_path)
-    return out_path, scene
+def main(argv: list[str] | None = None) -> int:
+    import mujoco
+    for tSeed in VALIDATE_SEEDS:
+        tPath, tScene = buildIntegratedXml(tSeed)
+        tModel = mujoco.MjModel.from_xml_path(tPath)
+        tData = mujoco.MjData(tModel)
+        mujoco.mj_resetDataKeyframe(tModel, tData, 0)
+        mujoco.mj_forward(tModel, tData)
+        tCameras = [mujoco.mj_id2name(tModel, mujoco.mjtObj.mjOBJ_CAMERA, tI) for tI in range(tModel.ncam)]
+        print(f"seed{tSeed}: VALID nq={tModel.nq} nu={tModel.nu} ncam={tModel.ncam} {tCameras} "
+              f"base=({tData.qpos[0]:.2f},{tData.qpos[1]:.2f},z={tData.qpos[2]:.2f}) "
+              f"objs={[tObj.label for tObj in tScene.mObjects]}")
+    return 0
 
 
 if __name__ == "__main__":
-    import mujoco
-    for seed in [0, 1]:
-        path, scene = build_integrated_xml(seed)
-        m = mujoco.MjModel.from_xml_path(path)
-        d = mujoco.MjData(m)
-        mujoco.mj_resetDataKeyframe(m, d, 0)
-        mujoco.mj_forward(m, d)
-        cams = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i) for i in range(m.ncam)]
-        print(f"seed{seed}: VALID nq={m.nq} nu={m.nu} ncam={m.ncam} {cams} "
-              f"base=({d.qpos[0]:.2f},{d.qpos[1]:.2f},z={d.qpos[2]:.2f}) "
-              f"objs={[o.label for o in scene.objects]}")
+    raise SystemExit(main())

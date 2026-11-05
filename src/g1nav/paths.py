@@ -27,6 +27,9 @@ OUTPUTS_DIR = REPO_ROOT / "outputs"
 EAGLE_DIR = Path(os.environ.get("G1NAV_EAGLE", ASSETS_DIR / "eagle-n16"))
 # checkpoint / output folder on the GPU machine used for training and the recorded runs ("pod layout")
 WORKSPACE_CKPT_DIR = Path(os.environ.get("G1NAV_WORKSPACE_CKPT", "/workspace/ckpt"))
-# where the results dashboard also looks for artifacts copied from the GPU machine
-DASHBOARD_DATA_DIR = Path(os.environ.get("G1NAV_DATA", Path.home() / "Desktop" / "g1nav_dash"))
-DASHBOARD_VIDEO_DIR = Path(os.environ.get("G1NAV_VIDEOS", Path.home() / "g1nav" / "videos"))
+
+
+def dashboardArtifactDirs() -> tuple[Path, Path]:
+    """Folders the results dashboard searches before the repository: $G1NAV_DATA and $G1NAV_VIDEOS (read per call)."""
+    return (Path(os.environ.get("G1NAV_DATA", Path.home() / "Desktop" / "g1nav_dash")),
+            Path(os.environ.get("G1NAV_VIDEOS", Path.home() / "g1nav" / "videos")))

@@ -1,61 +1,67 @@
-"""Local CPU smoke test: load Unitree G1, step physics, render one offscreen frame.
+"""MuJoCo sanity check of the vendored Unitree G1 model: load, list actuators, step physics, render one frame.
 
-Validates that the MJCF asset + MuJoCo install work before any GPU work.
-Runs on Mac (CPU). Not part of training — just a sanity check.
+Validates that the MJCF asset (assets/mujoco_menagerie/unitree_g1/scene.xml) and the MuJoCo install work before
+any GPU work; runs on a CPU-only machine. Not part of training. Output: console report and, when offscreen
+rendering works, assets/smoke_frame.png.
+
+    python -m g1nav.envs.smoke_test
 """
+from __future__ import annotations
+
 import os
-import sys
-import numpy as np
-import mujoco
 
 from g1nav.paths import ASSETS_DIR, G1_DIR
+
 SCENE = os.path.join(str(G1_DIR), "scene.xml")
+SMOKE_STEPS = 200
+RENDER_HEIGHT, RENDER_WIDTH = 240, 320
 
 
-def main():
+def main(argv: list[str] | None = None) -> int:
+    import mujoco
+
     print(f"[smoke] mujoco {mujoco.__version__}")
     print(f"[smoke] loading {SCENE}")
-    model = mujoco.MjModel.from_xml_path(SCENE)
-    data = mujoco.MjData(model)
+    tModel = mujoco.MjModel.from_xml_path(SCENE)
+    tData = mujoco.MjData(tModel)
 
-    print(f"[smoke] nq={model.nq} nv={model.nv} nu={model.nu} (actuators)")
-    print(f"[smoke] nbody={model.nbody} ngeom={model.ngeom}")
+    print(f"[smoke] nq={tModel.nq} nv={tModel.nv} nu={tModel.nu} (actuators)")
+    print(f"[smoke] nbody={tModel.nbody} ngeom={tModel.ngeom}")
 
-    # list actuator (joint) names -> these define the action space later
-    names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
-             for i in range(model.nu)]
-    print(f"[smoke] actuators ({model.nu}):")
-    for n in names:
-        print(f"         {n}")
+    # actuator (joint) names -> these define the action space
+    tNames = [mujoco.mj_id2name(tModel, mujoco.mjtObj.mjOBJ_ACTUATOR, tI) for tI in range(tModel.nu)]
+    print(f"[smoke] actuators ({tModel.nu}):")
+    for tName in tNames:
+        print(f"         {tName}")
 
-    # step physics a bit from default keyframe if present
-    if model.nkey > 0:
-        mujoco.mj_resetDataKeyframe(model, data, 0)
-        print(f"[smoke] reset to keyframe 0")
-    mujoco.mj_forward(model, data)
-
-    for _ in range(200):
-        mujoco.mj_step(model, data)
-    print(f"[smoke] stepped 200 steps OK; base height z={data.qpos[2]:.3f}")
+    # step physics from the default keyframe if present
+    if tModel.nkey > 0:
+        mujoco.mj_resetDataKeyframe(tModel, tData, 0)
+        print("[smoke] reset to keyframe 0")
+    mujoco.mj_forward(tModel, tData)
+    for _ in range(SMOKE_STEPS):
+        mujoco.mj_step(tModel, tData)
+    print(f"[smoke] stepped {SMOKE_STEPS} steps OK; base height z={tData.qpos[2]:.3f}")
 
     # offscreen render
     try:
-        renderer = mujoco.Renderer(model, height=240, width=320)
-        renderer.update_scene(data)
-        img = renderer.render()
-        out = os.path.join(str(ASSETS_DIR), "smoke_frame.png")
+        tRenderer = mujoco.Renderer(tModel, height=RENDER_HEIGHT, width=RENDER_WIDTH)
+        tRenderer.update_scene(tData)
+        tImage = tRenderer.render()
+        tOut = os.path.join(str(ASSETS_DIR), "smoke_frame.png")
         try:
             import imageio.v2 as imageio
-            imageio.imwrite(out, img)
-            print(f"[smoke] wrote render {out} shape={img.shape}")
-        except Exception as e:
-            print(f"[smoke] render OK shape={img.shape} but imageio save failed: {e}")
-    except Exception as e:
-        print(f"[smoke] OFFSCREEN RENDER FAILED: {e}")
+            imageio.imwrite(tOut, tImage)
+            print(f"[smoke] wrote render {tOut} shape={tImage.shape}")
+        except Exception as tError:
+            print(f"[smoke] render OK shape={tImage.shape} but imageio save failed: {tError}")
+    except Exception as tError:
+        print(f"[smoke] OFFSCREEN RENDER FAILED: {tError}")
         print("[smoke] (physics is fine; rendering backend may need a GL context)")
 
     print("[smoke] DONE")
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

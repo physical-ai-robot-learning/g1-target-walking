@@ -6,7 +6,7 @@ and a PPO policy trained from scratch outputs 29 lower-body PD joint targets at 
 motion is physics-simulated; there is no kinematic playback.
 
 > **Scope.** In the recorded demo runs the target label is chosen by keyword overlap between
-> the instruction and the scene's object labels (`code/navigation/grounding.py`, called from
+> the instruction and the scene's object labels (`src/g1nav/navigation/grounding.py`, called from
 > `cortex_eagle.py`), and the target position is read from the generated scene (simulator
 > ground truth, `navigate.py`). The GR00T N1.6 Eagle encoder is run on the start ego frame and
 > the shape/norm of its embedding are logged, but the embedding does not influence the chosen
@@ -16,7 +16,7 @@ motion is physics-simulated; there is no kinematic playback.
 > something the demos show.
 
 Every number in this report is checked against files in the repository by
-`python analysis/verify_claims.py`; the claim-by-claim audit is in [claims.md](claims.md).
+`python -m analysis.verify_claims`; the claim-by-claim audit is in [claims.md](../docs/claims.md).
 
 ---
 
@@ -101,10 +101,10 @@ No trajectories were collected and nothing is trained on a dataset:
 - **Control** is trained by on-policy PPO inside MJX; the only data are the transitions that the
   8192 parallel simulators generate and consume during training.
 
-Instructions are generated from seeded templates (`code/envs/instructions.py`) in three tiers
-(go-to / follow / turn-after-pass); scenes come from `code/envs/scene_gen.py` (seed → exact
+Instructions are generated from seeded templates (`src/g1nav/envs/instructions.py`) in three tiers
+(go-to / follow / turn-after-pass); scenes come from `src/g1nav/envs/scene_gen.py` (seed → exact
 3-object arena). The recorded demos use only the go-to tier on seeds 0–2. See
-`dataset/NOTE.md`.
+`docs/dataset.md`.
 
 ## 3.2 Target selection components
 
@@ -115,12 +115,12 @@ Instructions are generated from seeded templates (`code/envs/instructions.py`) i
   keeps the historical key name `vlm_target` for the keyword-selected label.
 - `navigate.py`: reads the chosen target's `(x, y)` from the generated scene. Its `--use_vlm`
   flag is declared but not implemented.
-- `color_detect.py`: HSV colour masking and shape heuristics. Together with ego-depth and camera
+- `color_detect.py` (now in `archive/`): HSV colour masking and shape heuristics. Together with ego-depth and camera
   geometry this would give a bearing/distance estimate (`Navigator.lock_goal_from_ego`); it is
   **not used** in the recorded runs and was not evaluated.
 
 Recorded: the Eagle encoder ran on each start frame (286 tokens × 2048-d embedding, logged in
-`videos/*.cognition.json`), and the keyword rule picked the instructed object in all three demo
+`media/*.cognition.json`), and the keyword rule picked the instructed object in all three demo
 scenes. Each scene's instruction names a unique colour + shape combination, so this is a check
 of the string rule, not of perception.
 
@@ -135,14 +135,14 @@ of the string rule, not of perception.
 - **Reward:** the Playground G1 Joystick reward with its default scales in the final run
   (`--termination -100 --track_lin 1.0 --stand_still -1.0`, which are the defaults; §5.6 explains
   why earlier edits were reverted).
-- **Checkpoint:** `checkpoint/walk_t4_latest.pkl` stores `{"step": 154828800, "params": ...}`
+- **Checkpoint:** `results/checkpoints/walk_t4_latest.pkl` stores `{"step": 154828800, "params": ...}`
   and is byte-identical to `walk_t4_step0154828800.pkl`.
 
 ### Walking emergence
 
-Rewards are the training-time evaluation rewards in `checkpoint/walk_t4_metrics.jsonl`.
+Rewards are the training-time evaluation rewards in `results/checkpoints/walk_t4_metrics.jsonl`.
 Forward velocity, net distance and minimum torso height are a CPU re-evaluation of every
-committed checkpoint with `code/locomotion/walk_eval.py` (raw environment, no auto-reset,
+committed checkpoint with `src/g1nav/locomotion/walk_eval.py` (raw environment, no auto-reset,
 command vx = 0.6 m/s, 250 steps = 5 s), stored in `results/walk_sweep_cpu/walk_sweep.json`.
 
 | step | eval reward | fwd_vel (cmd 0.6) | net dist | min torso z | verdict |
@@ -157,7 +157,7 @@ command vx = 0.6 m/s, 250 steps = 5 s), stored in `results/walk_sweep_cpu/walk_s
 
 The `min_z` field is `qpos[2]` as reported by `walk_eval.py`; negative values occur only for
 checkpoints that fall. The training-time rollout of the final checkpoint
-(`checkpoint/walk_t4_rollout.json`, 200 steps = 4 s, same command) reports 0.519 m/s mean local
+(`results/checkpoints/walk_t4_rollout.json`, 200 steps = 4 s, same command) reports 0.519 m/s mean local
 forward velocity, 2.07 m net displacement and 0.745 m minimum torso height.
 
 Throughput, from the `elapsed_min` field of `walk_t4_metrics.jsonl`: about 2.3 M steps/min
@@ -179,7 +179,7 @@ is measured after the 2 s standing post-roll.
 | 2 | "go to the purple cylinder" | purple cylinder | yes | 0.54 m | 0.75 m | 668 |
 
 The recorded GPU runs' `NAV` log lines are not in the repository. Re-running the same three
-episodes on CPU (`scripts/rerun_demo_episodes.py`, `results/demo_rerun_cpu/`) reproduces the
+episodes on CPU (`g1nav.navigation.rerun_demo_episodes`, `results/demo_rerun_cpu/`) reproduces the
 final distances and torso heights to the printed precision; frame counts match for seeds 0 and 2
 and differ by one frame for seed 1 (386 vs 387). The seed-2 final distance (0.54 m) is just inside
 the 0.55 m stop radius.
@@ -247,28 +247,28 @@ repository; they are the author's engineering record, not re-checkable results.
 bash scripts/pod/setup_ada.sh
 
 # train the walking policy (default reward scales)
-python code/locomotion/train_walk.py --timesteps 500000000 --num_envs 8192 \
+python -m g1nav.locomotion.train_walk --timesteps 500000000 --num_envs 8192 \
     --termination -100 --track_lin 1.0 --stand_still -1.0 --num_evals 50 \
-    --out checkpoint/walk_t4
+    --out results/checkpoints/walk_t4
 
 # raw-environment evaluation of one checkpoint, or a sweep over all of them
-G1NAV_OUT_DIR=results python code/locomotion/walk_eval.py checkpoint/walk_t4_latest.pkl
-G1NAV_OUT_DIR=results python code/locomotion/walk_eval.py --sweep checkpoint 'walk_t4_step*.pkl'
+G1NAV_OUT_DIR=results python -m g1nav.locomotion.walk_eval results/checkpoints/walk_t4_latest.pkl
+G1NAV_OUT_DIR=results python -m g1nav.locomotion.walk_eval --sweep results/checkpoints 'walk_t4_step*.pkl'
 
 # seeded scene generation
-python code/envs/scene_gen.py --seed 0
+python -m g1nav.envs.scene_gen --seed 0
 
 # keyword target selection + Eagle embedding log (needs the encoder at $G1NAV_EAGLE)
-python code/navigation/cortex_eagle.py --image ego.png \
+python -m g1nav.navigation.cortex_eagle --image ego.png \
     --instruction "go to the orange cylinder" \
     --labels "orange cylinder,yellow ball,purple cube" --result cortex.json
 
 # closed loop: target position from the scene → Navigator → walking policy → physics → video
-python code/navigation/navigate.py --ckpt checkpoint/walk_t4_latest.pkl --seed 0 \
+python -m g1nav.navigation.navigate --ckpt results/checkpoints/walk_t4_latest.pkl --seed 0 \
     --target "orange cylinder" --seconds 12 --out outputs/nav_seed0.mp4
 
 # the three demo episodes, re-measured (CPU is enough)
-python scripts/rerun_demo_episodes.py --cpu --outdir results/demo_rerun_cpu
+python -m g1nav.navigation.rerun_demo_episodes --cpu --outdir results/demo_rerun_cpu
 ```
 
 The committed checkpoints end at 154.8 M steps. Their spacing (10,321,920 steps, i.e. 50

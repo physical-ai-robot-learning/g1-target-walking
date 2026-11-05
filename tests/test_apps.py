@@ -31,6 +31,17 @@ ENV = {"G1NAV_DATA": "/nonexistent/g1nav_dash", "G1NAV_VIDEOS": "/nonexistent/g1
        "WALK_OUT": os.path.join(ROOT, "results", "checkpoints", "walk_t4")}
 # repository folders that moved in the 2026-11 refactor (old -> new), applied to the rendered text
 PATH_MOVES = {"videos": "media", "checkpoint": os.path.join("results", "checkpoints")}
+# intended text changes of the refactor (old -> new): module paths, and the results-dashboard subtitle reframed
+# from "language-conditioned" to the project's actual scope (keyword target selection, see README)
+TEXT_MOVES = {
+    "Language-conditioned lower-body navigation for the Unitree G1 in MuJoCo (MJX).":
+        "Humanoid locomotion RL with hierarchical target navigation for the Unitree G1 in MuJoCo (MJX).",
+    "`code/navigation/cortex_eagle.py`": "`g1nav.navigation.cortex_eagle`",
+}
+# Rendered by the old results dashboard only: `st.video(x) if x else st.info(...)` as a bare expression made
+# Streamlit "magic" also print a help box of the returned DeltaGenerator under each walking-emergence panel. The
+# refactor writes it as an if/else statement, so these boxes are gone (docs/refactor_2026-11.md).
+DROPPED_PREFIXES = ("Help.value=DeltaGenerator(",)
 
 
 def _texts(at):
@@ -55,6 +66,8 @@ def _walk(el):
 
 
 def _normalise(text):
+    for old, new in TEXT_MOVES.items():
+        text = text.replace(new, old)
     for old, new in PATH_MOVES.items():
         text = text.replace(os.path.join(ROOT, new), os.path.join(ROOT, old))
     return text.replace(ROOT, "<repo>")
@@ -88,4 +101,4 @@ def test_first_render_unchanged(name, golden, monkeypatch):
         with open(GOLDEN, "w") as f:
             json.dump(data, f, indent=1, sort_keys=True)
         return
-    assert texts == golden[name]
+    assert texts == [t for t in golden[name] if not t.startswith(DROPPED_PREFIXES)]

@@ -3,7 +3,8 @@ import os
 
 import pytest
 
-from g1nav.navigation.grounding import keyword_target, label_score
+from g1nav.navigation.grounding import keywordTarget as keyword_target
+from g1nav.navigation.grounding import labelScore as label_score
 from analysis import evidence as ev
 
 

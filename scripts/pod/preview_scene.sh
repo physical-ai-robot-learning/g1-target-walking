@@ -15,9 +15,9 @@ LABELS_TXT="$WS/ckpt/ui_labels.txt"
 
 "$RLV/bin/python" - "$SEED" "$EGO" "$LABELS_TXT" <<'PY' 2>/dev/null
 import sys
-from g1nav.navigation.pipeline import render_scene
+from g1nav.navigation.pipeline import renderScene
 seed, out, labelsTxt = int(sys.argv[1]), sys.argv[2], sys.argv[3]
-labels = render_scene(seed, out)
+labels = renderScene(seed, out)
 open(labelsTxt, "w").write(",".join(labels))
 PY
 echo "OBJECTS=$(cat "$LABELS_TXT" 2>/dev/null)"

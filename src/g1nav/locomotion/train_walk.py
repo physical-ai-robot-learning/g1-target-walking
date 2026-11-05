@@ -1,206 +1,243 @@
-"""Train the low-level velocity-conditioned walking policy for the G1.
+"""Train the velocity-conditioned PPO walking policy for the Unitree G1 (MuJoCo Playground G1JoystickFlatTerrain, MJX).
 
-Uses mujoco_playground's built-in `G1JoystickFlatTerrain` env (MJX) + brax PPO.
-The env's action IS a PD joint-position target (motor_targets = default_pose +
-action*action_scale), which is the joint-target output this project uses.
-The command is (vx, vy, yaw_rate) — the interface the Navigator drives.
+Stage 4 of the pipeline (the only learned part). The environment's action is a PD joint-position target
+(motor_targets = default_pose + action * action_scale) and its command is (vx, vy, yaw_rate) in the robot's heading
+frame — the interface the Navigator drives. Training is brax PPO with Playground's tuned hyperparameters, the
+official domain randomiser and a separate eval_env (without domain randomisation the reward rose but the policy did
+not walk). At every evaluation a checkpoint is saved and a 4 s rollout is run in the RAW environment (no
+auto-reset wrapper, so falls are real; walk_eval.py uses the identical setup).
 
-This is the highest-risk milestone (biped balance). We start on flat terrain and
-check walking in the raw environment (walk_eval.py) before using a checkpoint.
+The reward-scale flags default to the edited values of an earlier run (--termination -3 --track_lin 2.0
+--stand_still -3.0); the final run passed the Playground defaults explicitly (-100 / 1.0 / -1.0), see the README.
 
-Run on a GPU machine inside the venv (pod layout):
-    source /workspace/venv/bin/activate
-    MUJOCO_GL=egl python train_walk.py --timesteps 60000000 --out /workspace/ckpt/walk
+Outputs (prefix --out): <out>_metrics.jsonl (step, eval reward, wall-clock), <out>_latest.pkl and
+<out>_step<N>.pkl ({"step", "params"}), <out>_rollout.{mp4,json}, and at the end <out>.pkl + <out>_cfg.pkl.
+Needs a GPU with the pinned stack (configs/envs/requirements-gpu.txt).
 
-Outputs a brax params pickle to --out (+ numbered checkpoints, metrics and rollouts).
+    python -m g1nav.locomotion.train_walk --timesteps 500000000 --num_envs 8192 \
+        --termination -100 --track_lin 1.0 --stand_still -1.0 --num_evals 50 --out results/checkpoints/walk_t4
 """
 from __future__ import annotations
+
 import argparse
 import functools
+import json
 import os
 import pickle
 import time
 
+from g1nav.paths import WORKSPACE_CKPT_DIR
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--env", default="G1JoystickFlatTerrain")
-    ap.add_argument("--timesteps", type=int, default=60_000_000,
-                    help="PPO env steps. Full recipe is 200M; 40-80M usually walks.")
-    ap.add_argument("--out", default="/workspace/ckpt/walk")
-    ap.add_argument("--num_envs", type=int, default=8192)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--restore", default=None,
-                    help="path to a *_latest.pkl / *.pkl to resume training from")
-    ap.add_argument("--termination", type=float, default=-3.0,
-                    help="fall penalty scale; default -3 (env default is -100, "
-                         "which makes the policy too scared to attempt walking)")
-    ap.add_argument("--num_evals", type=int, default=100,
-                    help="number of evals across training; each saves a checkpoint")
-    ap.add_argument("--track_lin", type=float, default=2.0,
-                    help="tracking_lin_vel reward scale (default env=1.0; raise to force forward motion)")
-    ap.add_argument("--stand_still", type=float, default=-3.0,
-                    help="stand_still penalty scale (default env=-1.0; more negative discourages standing)")
-    args = ap.parse_args()
+ROLLOUT_STEPS = 200                  # 4 s at 50 Hz
+ROLLOUT_COMMAND = (0.6, 0.0, 0.0)    # forward command of the in-training rollout (m/s, m/s, rad/s)
+ROLLOUT_FPS = 50
+ROLLOUT_RENDER_HEIGHT, ROLLOUT_RENDER_WIDTH = 288, 384
+ROLLOUT_CAMERA_DISTANCE = 4.0
+ROLLOUT_CAMERA_ELEVATION = -12
+ROLLOUT_CAMERA_AZIMUTH = 135
+ROLLOUT_LOOKAT_HEIGHT = 0.5
+LINVEL_SENSOR = "local_linvel_pelvis"
 
+
+def buildParser() -> argparse.ArgumentParser:
+    tParser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    tParser.add_argument("--env", default="G1JoystickFlatTerrain")
+    tParser.add_argument("--timesteps", type=int, default=60_000_000,
+                         help="PPO env steps. Full recipe is 200M; 40-80M usually walks.")
+    tParser.add_argument("--out", default=str(WORKSPACE_CKPT_DIR / "walk"))
+    tParser.add_argument("--num_envs", type=int, default=8192)
+    tParser.add_argument("--seed", type=int, default=0)
+    tParser.add_argument("--restore", default=None,
+                         help="path to a *_latest.pkl / *.pkl to resume training from")
+    tParser.add_argument("--termination", type=float, default=-3.0,
+                         help="fall penalty scale; default -3 (env default is -100, "
+                              "which makes the policy too scared to attempt walking)")
+    tParser.add_argument("--num_evals", type=int, default=100,
+                         help="number of evals across training; each saves a checkpoint")
+    tParser.add_argument("--track_lin", type=float, default=2.0,
+                         help="tracking_lin_vel reward scale (default env=1.0; raise to force forward motion)")
+    tParser.add_argument("--stand_still", type=float, default=-3.0,
+                         help="stand_still penalty scale (default env=-1.0; more negative discourages standing)")
+    return tParser
+
+
+class TrainingCallbacks:
+    """brax PPO callbacks: metrics log (progress_fn) and checkpoint + raw-env rollout (policy_params_fn)."""
+
+    def __init__(self, outPrefix, renderEnvFactory, jaxModule):
+        self.mOut = outPrefix
+        self.mJax = jaxModule
+        self.mMetricsPath = outPrefix + "_metrics.jsonl"
+        open(self.mMetricsPath, "w").close()  # truncate
+        self.mTimes = [time.monotonic()]      # wall-clock starts here (before the render env is built)
+        self.mRenderEnv = renderEnvFactory()  # raw registry env (obs/dynamics), no brax wrappers
+
+    def elapsedMin(self) -> float:
+        return (time.monotonic() - self.mTimes[0]) / 60
+
+    def progress(self, step, metrics):
+        """brax progress_fn(step, metrics): print and append one JSON line per evaluation."""
+        self.mTimes.append(time.monotonic())
+        tReward = float(metrics.get("eval/episode_reward", float("nan")))
+        tRewardStd = float(metrics.get("eval/episode_reward_std", float("nan")))
+        tElapsed = self.mTimes[-1] - self.mTimes[0]
+        print(f"[walk] step={step:>12,}  reward={tReward:8.3f} +/-{tRewardStd:6.3f}  "
+              f"elapsed={tElapsed/60:5.1f}m", flush=True)
+        with open(self.mMetricsPath, "a") as tFile:
+            tFile.write(json.dumps({"step": int(step), "reward": tReward,
+                                    "reward_std": tRewardStd, "elapsed_min": tElapsed / 60}) + "\n")
+
+    def saveCheckpoint(self, step, make_policy, params):
+        """brax policy_params_fn(step, make_policy, params): latest + numbered checkpoint, then a raw-env rollout."""
+        try:
+            tBlob = {"step": int(step), "params": params}
+            with open(self.mOut + "_latest.pkl", "wb") as tFile:
+                pickle.dump(tBlob, tFile)
+            # also a NUMBERED checkpoint so every evaluation can be swept later (~2 MB each)
+            with open(self.mOut + f"_step{int(step):010d}.pkl", "wb") as tFile:
+                pickle.dump(tBlob, tFile)
+        except Exception as tError:
+            print(f"[walk] ckpt save failed: {tError}", flush=True)
+            return
+        try:
+            self.rollout(step, make_policy, params)
+        except Exception as tError:
+            print(f"[walk] rollout failed: {tError}", flush=True)
+
+    def rollout(self, step, makePolicy, params):
+        """4 s forward-command rollout in the RAW env (no AutoResetWrapper): video + local forward velocity.
+
+        The brax training wrapper teleports the robot back to the start pose on every fall, which masks falls as
+        "stepping in place" (min_z ~0.74, x ~0). The raw env shows reality. The command is in the robot's heading
+        frame, so the LOCAL forward velocity (what tracking_lin_vel rewards) and the net horizontal displacement
+        are reported, not world-X.
+        """
+        import imageio
+        import jax.numpy as jp
+        import mujoco
+        import numpy as np
+
+        tJax = self.mJax
+        tMjModel = self.mRenderEnv.mj_model
+        tPolicy = tJax.jit(makePolicy(params, deterministic=True))
+        tReset = tJax.jit(self.mRenderEnv.reset)
+        tStep = tJax.jit(self.mRenderEnv.step)
+        tState = tReset(tJax.random.PRNGKey(0))            # RAW, unbatched, no auto-reset
+        tCommand = jp.array(list(ROLLOUT_COMMAND))
+        tLinvelId = mujoco.mj_name2id(tMjModel, mujoco.mjtObj.mjOBJ_SENSOR, LINVEL_SENSOR)
+        tLinvelAdr = tMjModel.sensor_adr[tLinvelId]
+        tMjData = mujoco.MjData(tMjModel)
+        tRenderer = mujoco.Renderer(tMjModel, ROLLOUT_RENDER_HEIGHT, ROLLOUT_RENDER_WIDTH)
+        tCamera = mujoco.MjvCamera()
+        tCamera.type = mujoco.mjtCamera.mjCAMERA_FREE
+        tCamera.distance = ROLLOUT_CAMERA_DISTANCE
+        tCamera.elevation = ROLLOUT_CAMERA_ELEVATION
+        tCamera.azimuth = ROLLOUT_CAMERA_AZIMUTH
+        tFrames, tXs, tYs, tZs, tForward = [], [], [], [], []
+        for _ in range(ROLLOUT_STEPS):
+            tState.info["command"] = tCommand
+            tAct, _ = tPolicy(tState.obs, tJax.random.PRNGKey(0))
+            tState = tStep(tState, tAct)
+            tQpos = np.array(tState.data.qpos).reshape(-1)
+            tSensorData = np.array(tState.data.sensordata).reshape(-1)
+            tMjData.qpos[:] = tQpos
+            tMjData.qvel[:] = np.array(tState.data.qvel).reshape(-1)
+            mujoco.mj_forward(tMjModel, tMjData)
+            tCamera.lookat[:] = [tQpos[0], tQpos[1], ROLLOUT_LOOKAT_HEIGHT]
+            tRenderer.update_scene(tMjData, camera=tCamera)
+            tFrames.append(tRenderer.render())
+            tXs.append(float(tQpos[0]))
+            tYs.append(float(tQpos[1]))
+            tZs.append(float(tQpos[2]))
+            tForward.append(float(tSensorData[tLinvelAdr]))
+        imageio.mimsave(self.mOut + "_rollout.mp4", tFrames, fps=ROLLOUT_FPS)
+        tRenderer.close()
+        tDx = tXs[-1] - tXs[0]
+        tDy = tYs[-1] - tYs[0]
+        tNet = float((tDx * tDx + tDy * tDy) ** 0.5)        # net horizontal distance
+        tMeanForward = float(np.mean(tForward))              # mean local forward velocity (cmd 0.6)
+        with open(self.mOut + "_rollout.json", "w") as tFile:
+            json.dump({"step": int(step), "x_travel": tNet, "dx": float(tDx),
+                       "dy": float(tDy), "fwd_vel": tMeanForward,
+                       "min_z": float(min(tZs))}, tFile)
+        print(f"[walk]   rollout @ {int(step)}: net_dist={tNet:.2f}m "
+              f"fwd_vel={tMeanForward:+.2f}(cmd0.6) min_z={min(tZs):.2f}", flush=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    tArgs = buildParser().parse_args(argv)
     os.environ.setdefault("MUJOCO_GL", "egl")
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    os.makedirs(os.path.dirname(tArgs.out), exist_ok=True)
 
     import jax
+    from brax.training.agents.ppo import networks as ppo_networks
+    from brax.training.agents.ppo import train as ppo
     from mujoco_playground import registry, wrapper
     from mujoco_playground.config import locomotion_params
-    from brax.training.agents.ppo import train as ppo
-    from brax.training.agents.ppo import networks as ppo_networks
 
     print(f"[walk] jax devices: {jax.devices()}")
-    # Stack pinned to mujoco 3.4 + playground 0.1.0 -> MJX uses the classic JAX
-    # backend (no warp), so no impl override is needed.
-    # Soften the fall penalty so the policy explores real locomotion instead of
-    # learning to barely-not-die (which is what -100 + reward+8/no-walking looked like).
-    env_cfg = registry.get_default_config(args.env)
-    env_cfg.reward_config.scales.termination = args.termination
-    # FORWARD INCENTIVE: the policy was learning to stand still (x_travel~0) because
-    # standing was a safe reward path. Strengthen command-velocity tracking and the
-    # stand-still penalty so it MUST move to maximize reward.
-    env_cfg.reward_config.scales.tracking_lin_vel = args.track_lin
-    env_cfg.reward_config.scales.stand_still = args.stand_still
-    env = registry.load(args.env, config=env_cfg)
-    print(f"[walk] termination={env_cfg.reward_config.scales.termination} "
-          f"tracking_lin_vel={env_cfg.reward_config.scales.tracking_lin_vel} "
-          f"stand_still={env_cfg.reward_config.scales.stand_still}")
-    ppo_cfg = locomotion_params.brax_ppo_config(args.env)
-    ppo_cfg.num_timesteps = args.timesteps
-    ppo_cfg.num_envs = args.num_envs
-    ppo_cfg.num_evals = args.num_evals   # more evals -> checkpoint saved more often
-    print(f"[walk] env={args.env} obs={env.observation_size} act={env.action_size}")
-    print(f"[walk] timesteps={ppo_cfg.num_timesteps:,} num_envs={ppo_cfg.num_envs}")
+    # Stack pinned to mujoco 3.4 + playground 0.1.0 -> MJX uses the classic JAX backend (no warp).
+    tEnvConfig = registry.get_default_config(tArgs.env)
+    tEnvConfig.reward_config.scales.termination = tArgs.termination
+    tEnvConfig.reward_config.scales.tracking_lin_vel = tArgs.track_lin
+    tEnvConfig.reward_config.scales.stand_still = tArgs.stand_still
+    tEnv = registry.load(tArgs.env, config=tEnvConfig)
+    print(f"[walk] termination={tEnvConfig.reward_config.scales.termination} "
+          f"tracking_lin_vel={tEnvConfig.reward_config.scales.tracking_lin_vel} "
+          f"stand_still={tEnvConfig.reward_config.scales.stand_still}")
+    tPpoConfig = locomotion_params.brax_ppo_config(tArgs.env)
+    tPpoConfig.num_timesteps = tArgs.timesteps
+    tPpoConfig.num_envs = tArgs.num_envs
+    tPpoConfig.num_evals = tArgs.num_evals   # more evals -> checkpoint saved more often
+    print(f"[walk] env={tArgs.env} obs={tEnv.observation_size} act={tEnv.action_size}")
+    print(f"[walk] timesteps={tPpoConfig.num_timesteps:,} num_envs={tPpoConfig.num_envs}")
 
-    # network factory from the config
-    net_kwargs = dict(ppo_cfg.network_factory)
-    make_networks = functools.partial(ppo_networks.make_ppo_networks, **net_kwargs)
-
-    import json
-    metrics_path = args.out + "_metrics.jsonl"
-    open(metrics_path, "w").close()  # truncate
-    times = [time.monotonic()]
-    def progress(step, metrics):
-        times.append(time.monotonic())
-        rew = float(metrics.get("eval/episode_reward", float("nan")))
-        rew_std = float(metrics.get("eval/episode_reward_std", float("nan")))
-        elapsed = times[-1] - times[0]
-        print(f"[walk] step={step:>12,}  reward={rew:8.3f} +/-{rew_std:6.3f}  "
-              f"elapsed={elapsed/60:5.1f}m", flush=True)
-        # append to a metrics log the dashboard reads
-        with open(metrics_path, "a") as f:
-            f.write(json.dumps({"step": int(step), "reward": rew,
-                                "reward_std": rew_std, "elapsed_min": elapsed / 60}) + "\n")
-
-    # save a checkpoint every eval AND render a short rollout in-process (same
-    # GPU context as training -> no cuSolver clash). The dashboard reads the mp4.
-    import numpy as _np
-    render_env = registry.load(args.env, config=env_cfg)   # for obs/dynamics
-    _mjm = render_env.mj_model
-    def save_ckpt(step, make_policy, params):
-        try:
-            blob = {"step": int(step), "params": params}
-            with open(args.out + "_latest.pkl", "wb") as f:
-                pickle.dump(blob, f)
-            # also keep a NUMBERED checkpoint so we can sweep every eval later
-            # (full-checkpoint sweep). ~2MB each, ~50 total.
-            with open(args.out + f"_step{int(step):010d}.pkl", "wb") as f:
-                pickle.dump(blob, f)
-        except Exception as e:
-            print(f"[walk] ckpt save failed: {e}", flush=True)
-            return
-        # quick rollout video (forward command) so the dashboard shows progress.
-        # UNIFIED TRUTHFUL SETUP: use the RAW env (NO wrap_for_brax_training =>
-        # NO AutoResetWrapper). The brax wrapper teleports the robot back to the
-        # start pose on every fall (done), which MASKS falls as "stepping in
-        # place" (min_z~0.74, x~0). The raw env shows reality. We measure LOCAL
-        # forward velocity (what tracking_lin_vel rewards; command is in the
-        # robot's heading frame, NOT world-X) + net horizontal displacement.
-        # walk_eval.py uses this identical setup for the full-checkpoint sweep.
-        try:
-            import mujoco, imageio, jax.numpy as jp
-            pol = jax.jit(make_policy(params, deterministic=True))
-            rst = jax.jit(render_env.reset); stp = jax.jit(render_env.step)
-            st = rst(jax.random.PRNGKey(0))            # RAW, unbatched, no auto-reset
-            CMD = jp.array([0.6, 0.0, 0.0])
-            lv_id = mujoco.mj_name2id(_mjm, mujoco.mjtObj.mjOBJ_SENSOR, "local_linvel_pelvis")
-            lv_adr = _mjm.sensor_adr[lv_id]
-            mjd = mujoco.MjData(_mjm); rr = mujoco.Renderer(_mjm, 288, 384)
-            cam = mujoco.MjvCamera(); cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-            cam.distance = 4.0; cam.elevation = -12; cam.azimuth = 135
-            frames = []; xs = []; ys = []; zs = []; fwd = []
-            for _ in range(200):                 # 4 s
-                st.info["command"] = CMD
-                act, _ = pol(st.obs, jax.random.PRNGKey(0)); st = stp(st, act)
-                q = _np.array(st.data.qpos).reshape(-1)
-                sd = _np.array(st.data.sensordata).reshape(-1)
-                mjd.qpos[:] = q; mjd.qvel[:] = _np.array(st.data.qvel).reshape(-1)
-                mujoco.mj_forward(_mjm, mjd); cam.lookat[:] = [q[0], q[1], 0.5]
-                rr.update_scene(mjd, camera=cam); frames.append(rr.render())
-                xs.append(float(q[0])); ys.append(float(q[1])); zs.append(float(q[2]))
-                fwd.append(float(sd[lv_adr]))
-            imageio.mimsave(args.out + "_rollout.mp4", frames, fps=50)
-            rr.close()
-            dx = xs[-1] - xs[0]; dy = ys[-1] - ys[0]
-            net = float((dx * dx + dy * dy) ** 0.5)        # net horizontal distance
-            mfwd = float(_np.mean(fwd))                     # mean local forward vel (cmd=0.6)
-            with open(args.out + "_rollout.json", "w") as jf:
-                json.dump({"step": int(step), "x_travel": net, "dx": float(dx),
-                           "dy": float(dy), "fwd_vel": mfwd,
-                           "min_z": float(min(zs))}, jf)
-            print(f"[walk]   rollout @ {int(step)}: net_dist={net:.2f}m "
-                  f"fwd_vel={mfwd:+.2f}(cmd0.6) min_z={min(zs):.2f}", flush=True)
-        except Exception as e:
-            print(f"[walk] rollout failed: {e}", flush=True)
+    tMakeNetworks = functools.partial(ppo_networks.make_ppo_networks, **dict(tPpoConfig.network_factory))
+    tCallbacks = TrainingCallbacks(tArgs.out, lambda: registry.load(tArgs.env, config=tEnvConfig), jax)
 
     # optionally resume from a previous checkpoint (continue training)
-    restore_params = None
-    if args.restore:
-        with open(args.restore, "rb") as f:
-            ro = pickle.load(f)
-        restore_params = ro["params"] if isinstance(ro, dict) and "params" in ro else ro
-        print(f"[walk] RESUMING from {args.restore}", flush=True)
-
-    extra = {"restore_params": restore_params} if restore_params is not None else {}
-    # CRITICAL (matches the official locomotion.ipynb): pass DOMAIN RANDOMIZATION.
-    # Without it, the G1 walking policy overfits and is unstable (reward rises but
-    # it can't actually walk). This was the missing piece.
+    tExtra = {}
+    if tArgs.restore:
+        with open(tArgs.restore, "rb") as tFile:
+            tRestored = pickle.load(tFile)
+        tExtra["restore_params"] = (tRestored["params"] if isinstance(tRestored, dict) and "params" in tRestored
+                                    else tRestored)
+        print(f"[walk] RESUMING from {tArgs.restore}", flush=True)
+    # Domain randomisation, as in the official locomotion notebook. Without it the G1 policy overfits and does
+    # not actually walk (the reward rises anyway). This was the missing piece.
     try:
-        randomization_fn = registry.get_domain_randomizer(args.env)
-        print(f"[walk] domain randomizer: {randomization_fn is not None}", flush=True)
-    except Exception as e:
-        randomization_fn = None
-        print(f"[walk] no domain randomizer: {e}", flush=True)
-    if randomization_fn is not None:
-        extra["randomization_fn"] = randomization_fn
+        tRandomizationFn = registry.get_domain_randomizer(tArgs.env)
+        print(f"[walk] domain randomizer: {tRandomizationFn is not None}", flush=True)
+    except Exception as tError:
+        tRandomizationFn = None
+        print(f"[walk] no domain randomizer: {tError}", flush=True)
+    if tRandomizationFn is not None:
+        tExtra["randomization_fn"] = tRandomizationFn
 
-    train_fn = functools.partial(
+    tTrainFn = functools.partial(
         ppo.train,
-        **{k: v for k, v in ppo_cfg.items() if k not in ("network_factory",)},
-        network_factory=make_networks,
-        # use mujoco_playground's brax wrapper (mjx State is not brax pipeline_state)
+        **{tKey: tValue for tKey, tValue in tPpoConfig.items() if tKey not in ("network_factory",)},
+        network_factory=tMakeNetworks,
+        # mujoco_playground's brax wrapper (the MJX State is not a brax pipeline_state)
         wrap_env_fn=wrapper.wrap_for_brax_training,
-        progress_fn=progress,
-        policy_params_fn=save_ckpt,
-        seed=args.seed,
-        **extra,
+        progress_fn=tCallbacks.progress,
+        policy_params_fn=tCallbacks.saveCheckpoint,
+        seed=tArgs.seed,
+        **tExtra,
     )
+    # separate eval_env (official recipe), with the same reward overrides
+    tEvalEnv = registry.load(tArgs.env, config=tEnvConfig)
+    _, tParams, _ = tTrainFn(environment=tEnv, eval_env=tEvalEnv)
 
-    # separate eval_env (official recipe), with the same termination override
-    eval_env = registry.load(args.env, config=env_cfg)
-    make_inference_fn, params, _ = train_fn(environment=env, eval_env=eval_env)
-
-    with open(args.out + ".pkl", "wb") as f:
-        pickle.dump(params, f)
-    # also save env config for reproducible rollouts
-    with open(args.out + "_cfg.pkl", "wb") as f:
-        pickle.dump({"env": args.env, "env_cfg": env_cfg.to_dict()}, f)
-    print(f"[walk] saved params -> {args.out}.pkl")
-    print(f"[walk] total wall-clock: {(time.monotonic()-times[0])/60:.1f} min")
+    with open(tArgs.out + ".pkl", "wb") as tFile:
+        pickle.dump(tParams, tFile)
+    # also the env config, for reproducible rollouts
+    with open(tArgs.out + "_cfg.pkl", "wb") as tFile:
+        pickle.dump({"env": tArgs.env, "env_cfg": tEnvConfig.to_dict()}, tFile)
+    print(f"[walk] saved params -> {tArgs.out}.pkl")
+    print(f"[walk] total wall-clock: {tCallbacks.elapsedMin():.1f} min")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

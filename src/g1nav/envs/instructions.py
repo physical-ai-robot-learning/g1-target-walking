@@ -1,138 +1,129 @@
-"""Instruction templates + success criteria for G1Nav.
+"""Instruction templates and success criteria for G1Nav scenes.
 
-An *instruction* is a free-form English command tied to a scene. Each template
-knows how to:
-  - render text (possibly with paraphrases) given a target object,
-  - decide success given a trajectory of robot poses + object positions,
-  - expose the high-level goal the teacher FSM should pursue.
+An instruction is a free-form English command tied to a scene. Each template knows how to render text (with
+paraphrases) for a target object and how to decide success from a trajectory of robot poses. Everything is
+deterministic given (scene, rng), so instructions are regenerable from seeds. The templates span three tiers:
 
-Everything is deterministic given (scene, seed) so dataset regeneration is exact.
+  TIER 1 (single goal):    "go to the <obj>"   / "approach the <obj>"
+  TIER 2 (tracking):       "follow the <obj>"  (static scene -> same success rule as go-to, kept distinct)
+  TIER 3 (compositional):  "go straight and turn <dir> after passing the <obj>"
 
-The instruction set deliberately spans difficulty tiers so Results can be broken
-down by type (and so complex ones can serve as honest failure modes):
+The recorded demos use only the go-to tier (seeds 0-2); the other tiers were written for the unused
+behaviour-cloning plan (archive/planner.py).
 
-  TIER 1 (single goal):     "go to the <obj>"        / "approach the <obj>"
-  TIER 2 (tracking):        "follow the <obj>"       (static here -> == go-to, but kept distinct)
-  TIER 3 (compositional):   "go straight and turn <dir> after passing the <obj>"
+Input: a SceneSpec and a numpy Generator. Output: an Instruction (text, target, success rule).
+
+    python -m g1nav.envs.instructions          # print the instruction of seeds 0-5
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
+
 import numpy as np
 
+from g1nav.envs.scene_gen import SceneSpec, sampleScene
 
-# ----- geometry helpers ----------------------------------------------------
+REACH_RADIUS = 0.6     # within this xy distance of the target counts as "reached"
+PASS_RADIUS = 0.7      # within this the object counts as "passed"
+TURN_MIN_DEG = 60      # heading change after passing that counts as a turn
+TIERS = ["goto", "follow", "turn"]
+TIER_PROBABILITIES = [0.5, 0.2, 0.3]
+DEMO_SEEDS = 6
+DEMO_RNG_OFFSET = 1000  # instruction rng seed = DEMO_RNG_OFFSET + scene seed (as in docs/dataset.md)
+
 
 def _xy(p):
     return np.asarray(p[:2], dtype=float)
 
 
-def dist_xy(a, b) -> float:
+def distXy(a, b) -> float:
+    """Planar distance between two poses / points (first two components)."""
     return float(np.linalg.norm(_xy(a) - _xy(b)))
 
 
-# ----- instruction spec ----------------------------------------------------
-
-@dataclass
+@dataclass(frozen=True)
 class Instruction:
-    template_id: str
-    text: str                 # the rendered English instruction
-    target_label: str         # e.g. "red ball"
-    target_xy: tuple          # ground-truth target position (teacher-only)
-    params: dict              # template-specific (e.g. {"turn": "right"})
-    # success(traj, objects) -> bool ; traj is list of robot (x,y,yaw)
-    success_fn: Callable
+    """A rendered instruction. mTargetXy is the ground-truth target position (privileged, for success only)."""
+
+    mTemplateId: str
+    mText: str
+    mTargetLabel: str
+    mTargetXy: tuple
+    mParams: dict           # template-specific, e.g. {"turn": "right"}
+    mSuccessFn: Callable    # (traj, objects, instruction) -> bool; traj is a list of robot (x, y, yaw)
 
     def succeeded(self, traj, objects) -> bool:
-        return bool(self.success_fn(traj, objects, self))
+        return bool(self.mSuccessFn(traj, objects, self))
 
 
-# ----- success criteria ----------------------------------------------------
-
-REACH_RADIUS = 0.6     # within this xy distance of target counts as "reached"
-PASS_RADIUS = 0.7      # within this -> considered "passed" the object
-
-
-def _success_goto(traj, objects, instr) -> bool:
-    """Reached if any pose along the trajectory comes within REACH_RADIUS."""
-    t = instr.target_xy
-    return any(dist_xy(p, t) <= REACH_RADIUS for p in traj)
+def _successGoto(traj, objects, instr: Instruction) -> bool:
+    """Reached if any pose along the trajectory comes within REACH_RADIUS of the target."""
+    tTarget = instr.mTargetXy
+    return any(distXy(tPose, tTarget) <= REACH_RADIUS for tPose in traj)
 
 
-def _success_turn_after_pass(traj, objects, instr) -> bool:
-    """Must (1) pass near the object, then (2) change heading by ~90 deg in the
-    commanded direction *after* passing."""
-    t = instr.target_xy
-    turn = instr.params["turn"]  # "left" or "right"
-    pass_idx = None
-    for i, p in enumerate(traj):
-        if dist_xy(p, t) <= PASS_RADIUS:
-            pass_idx = i
-            break
-    if pass_idx is None or pass_idx >= len(traj) - 1:
+def _successTurnAfterPass(traj, objects, instr: Instruction) -> bool:
+    """(1) pass near the object, then (2) change heading by more than TURN_MIN_DEG in the commanded direction."""
+    tTarget = instr.mTargetXy
+    tTurn = instr.mParams["turn"]  # "left" or "right"
+    tPassIndex = next((tI for tI, tPose in enumerate(traj) if distXy(tPose, tTarget) <= PASS_RADIUS), None)
+    if tPassIndex is None or tPassIndex >= len(traj) - 1:
         return False
-    yaw0 = traj[pass_idx][2]
-    yaw1 = traj[-1][2]
-    dyaw = np.arctan2(np.sin(yaw1 - yaw0), np.cos(yaw1 - yaw0))  # wrapped
-    if turn == "left":
-        return dyaw > np.deg2rad(60)
-    else:
-        return dyaw < -np.deg2rad(60)
+    tYaw0 = traj[tPassIndex][2]
+    tYaw1 = traj[-1][2]
+    tDeltaYaw = np.arctan2(np.sin(tYaw1 - tYaw0), np.cos(tYaw1 - tYaw0))  # wrapped
+    if tTurn == "left":
+        return tDeltaYaw > np.deg2rad(TURN_MIN_DEG)
+    return tDeltaYaw < -np.deg2rad(TURN_MIN_DEG)
 
 
-# ----- templates -----------------------------------------------------------
-
-_GOTO_PARAPHRASES = [
+GOTO_PARAPHRASES = [
     "go to the {obj}",
     "walk to the {obj}",
     "approach the {obj}",
     "head toward the {obj}",
     "move to the {obj}",
 ]
-_FOLLOW_PARAPHRASES = [
+FOLLOW_PARAPHRASES = [
     "follow the {obj}",
     "go follow the {obj}",
     "track the {obj}",
 ]
-_TURN_PARAPHRASES = [
+TURN_PARAPHRASES = [
     "go straight and turn {turn} after passing the {obj}",
     "walk forward, then turn {turn} once you pass the {obj}",
     "pass the {obj} and then turn {turn}",
 ]
 
 
-def sample_instruction(scene, rng) -> Instruction:
-    """Pick a template + target object for a given scene, deterministically."""
-    objs = scene.objects
-    target = objs[int(rng.integers(len(objs)))]
-    label = target.label
-    txy = (target.x, target.y)
+def sampleInstruction(scene: SceneSpec, rng: np.random.Generator) -> Instruction:
+    """Pick a template tier, a paraphrase and a target object for the scene, deterministically given rng."""
+    tTarget = scene.mObjects[int(rng.integers(len(scene.mObjects)))]
+    tLabel = tTarget.label
+    tTargetXy = (tTarget.mX, tTarget.mY)
 
-    tier = rng.choice(["goto", "follow", "turn"], p=[0.5, 0.2, 0.3])
+    tTier = rng.choice(TIERS, p=TIER_PROBABILITIES)
+    if tTier == "goto":
+        tText = rng.choice(GOTO_PARAPHRASES).format(obj=tLabel)
+        return Instruction("goto", tText, tLabel, tTargetXy, {}, _successGoto)
+    if tTier == "follow":
+        tText = rng.choice(FOLLOW_PARAPHRASES).format(obj=tLabel)
+        # static scene -> follow reduces to reach-and-stay; reuse the go-to rule
+        return Instruction("follow", tText, tLabel, tTargetXy, {}, _successGoto)
+    tTurn = rng.choice(["left", "right"])
+    tText = rng.choice(TURN_PARAPHRASES).format(obj=tLabel, turn=tTurn)
+    return Instruction("turn_after_pass", tText, tLabel, tTargetXy, {"turn": tTurn}, _successTurnAfterPass)
 
-    if tier == "goto":
-        text = rng.choice(_GOTO_PARAPHRASES).format(obj=label)
-        return Instruction("goto", text, label, txy, {}, _success_goto)
 
-    if tier == "follow":
-        text = rng.choice(_FOLLOW_PARAPHRASES).format(obj=label)
-        # static scene -> follow reduces to reach-and-stay; reuse goto success
-        return Instruction("follow", text, label, txy, {}, _success_goto)
-
-    # turn-after-pass
-    turn = rng.choice(["left", "right"])
-    text = rng.choice(_TURN_PARAPHRASES).format(obj=label, turn=turn)
-    return Instruction("turn_after_pass", text, label, txy, {"turn": turn},
-                       _success_turn_after_pass)
+def main(argv: list[str] | None = None) -> int:
+    for tSeed in range(DEMO_SEEDS):
+        tScene = sampleScene(tSeed)
+        tInstr = sampleInstruction(tScene, np.random.default_rng(DEMO_RNG_OFFSET + tSeed))
+        print(f"seed={tSeed:2d} [{tInstr.mTemplateId:15s}] target={tInstr.mTargetLabel:16s} "
+              f"@({tInstr.mTargetXy[0]:+.2f},{tInstr.mTargetXy[1]:+.2f}) :: \"{tInstr.mText}\"")
+    return 0
 
 
 if __name__ == "__main__":
-    from g1nav.envs.scene_gen import sample_scene
-
-    for seed in range(6):
-        scene = sample_scene(seed)
-        rng = np.random.default_rng(1000 + seed)
-        instr = sample_instruction(scene, rng)
-        print(f"seed={seed:2d} [{instr.template_id:15s}] target={instr.target_label:16s} "
-              f"@({instr.target_xy[0]:+.2f},{instr.target_xy[1]:+.2f}) :: \"{instr.text}\"")
+    raise SystemExit(main())

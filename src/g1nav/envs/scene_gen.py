@@ -1,31 +1,34 @@
-"""Procedural arena scene generator for G1Nav.
+"""Seeded arena scenes for G1Nav: seed -> robot spawn + three coloured objects -> MuJoCo MJCF.
 
-Builds a MuJoCo MJCF (as a string / temp file) that contains:
-  - the Unitree G1 (included from menagerie, with cameras added via a wrapper)
-  - a bounded arena floor + low walls
-  - N brightly-colored objects (ball / cube / cylinder / cone) at random,
-    non-overlapping positions
-  - an egocentric RGBD camera on the torso (head height, looking forward)
-  - a fixed third-person camera for video
+Stage 1 of the pipeline. `sampleScene(seed)` is pure numpy and deterministic: the robot starts at a wall of a
+6 m x 6 m arena facing inward, and the objects are placed at random range/bearing inside its frontal field of view,
+non-overlapping. `buildMjcf(scene)` wraps the vendored Menagerie Unitree G1 (assets/mujoco_menagerie/unitree_g1)
+with a floor, low walls, the objects, an egocentric camera on the torso and a fixed third-person camera. The
+closed-loop runs use the MuJoCo Playground G1 model instead (navigation/integrated_scene.py) with the same scene
+layout, walls, objects and cameras (the XML helpers here are shared).
 
-Everything is seeded so a (seed) -> exact scene mapping holds. This is what
-makes dataset/ regenerable from a manifest of seeds.
+Input: an integer seed. Output: a SceneSpec and an MJCF XML string / file (no GPU; `mujoco` only for --validate).
 
-The generator does NOT depend on a GPU. It only needs `mujoco` to validate.
+    python -m g1nav.envs.scene_gen --seed 0 [--out scene.xml] [--validate]
 """
 from __future__ import annotations
 
+import argparse
+import math
 import os
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
+
 import numpy as np
 
-from g1nav.paths import ASSETS_DIR, G1_DIR as _G1_DIR
-G1_DIR = str(_G1_DIR)
+from g1nav.paths import ASSETS_DIR
+from g1nav.paths import G1_DIR as G1_DIR_PATH
+
+G1_DIR = str(G1_DIR_PATH)
 G1_XML = os.path.join(G1_DIR, "g1.xml")
 
 # ---- object palette -------------------------------------------------------
-# (name, mujoco geom type, nominal size triplet, default rgba)
+# colour name -> rgba
 COLORS = {
     "red":    (0.85, 0.10, 0.10, 1.0),
     "yellow": (0.90, 0.85, 0.10, 1.0),
@@ -39,212 +42,205 @@ SHAPES = {
     "ball":     ("sphere",   (0.09, 0, 0),        0.09),
     "cube":     ("box",      (0.08, 0.08, 0.08),  0.08),
     "cylinder": ("cylinder", (0.07, 0.12, 0),     0.12),
-    "cone":     ("ellipsoid",(0.08, 0.08, 0.14),  0.14),  # MJCF has no cone; ellipsoid stand-in
+    "cone":     ("ellipsoid", (0.08, 0.08, 0.14),  0.14),  # MJCF has no cone; ellipsoid stand-in
 }
 
+ARENA_HALF_M = 3.0             # arena spans [-half, half] in x and y
+N_OBJECTS = 3
+MIN_SEPARATION_M = 0.7         # between object centres
+VIEW_HALF_ANGLE_DEG = 36.0     # objects are placed inside this half-angle of the robot's heading
+NEAR_M = 1.3                   # closest object range
+FAR_FRACTION = 0.85            # farthest range as a fraction of the arena depth in front of the robot
+MIN_RANGE_SPAN_M = 0.5         # the range interval is at least [near, near + this]
+SPAWN_WALL_MARGIN_M = 0.35     # robot spawn distance from its wall
+SPAWN_END_MARGIN_M = 0.8       # spawn point keeps this far from the arena corners (along the wall)
+SPAWN_YAW_JITTER_RAD = 0.12
+OBJECT_WALL_MARGIN_M = 0.4     # objects stay this far inside the arena
+PLACEMENT_ATTEMPTS = 500       # rejection-sampling tries per object (the last try is kept if none succeeds)
+WALL_THICKNESS_M = 0.05
+WALL_HEIGHT_M = 0.3
+DEFAULT_SIZE_TEXT = "0.05"     # size attribute when a shape has no non-zero size
 
-@dataclass
+# Egocentric RGBD camera on torso_link: roughly head height, wide FOV, tilted ~12 deg down toward the frontal fan.
+EGO_CAMERA_XML = ('<camera name="ego" mode="fixed" pos="0.08 0 0.55" '
+                  'xyaxes="0 -1 0 0.22 0 1" fovy="95"/>')
+
+
+@dataclass(frozen=True)
 class ObjSpec:
-    color: str
-    shape: str
-    x: float
-    y: float
-    z: float
+    """One static object of the scene; z is the height of its centre when resting on the floor."""
+
+    mColor: str
+    mShape: str
+    mX: float
+    mY: float
+    mZ: float
 
     @property
     def label(self) -> str:
-        return f"{self.color} {self.shape}"
+        return f"{self.mColor} {self.mShape}"
 
 
-@dataclass
+@dataclass(frozen=True)
 class SceneSpec:
-    seed: int
-    objects: list = field(default_factory=list)
-    arena_half: float = 3.0          # arena spans [-half, half] in x and y
-    robot_yaw: float = 0.0
-    robot_x: float = 0.0             # robot spawn position
-    robot_y: float = 0.0
+    """A generated scene: objects, arena size and the robot spawn pose (x, y, yaw) in the world frame."""
 
-    def to_dict(self):
-        d = asdict(self)
-        return d
+    mSeed: int
+    mObjects: list = field(default_factory=list)
+    mArenaHalf: float = ARENA_HALF_M
+    mRobotYaw: float = 0.0
+    mRobotX: float = 0.0
+    mRobotY: float = 0.0
+
+    def toDict(self) -> dict:
+        """Plain dict with the original serialised keys (seed, objects[color, shape, x, y, z], arena_half, robot_*)."""
+        return {"seed": self.mSeed,
+                "objects": [{"color": tObj.mColor, "shape": tObj.mShape, "x": tObj.mX, "y": tObj.mY, "z": tObj.mZ}
+                            for tObj in self.mObjects],
+                "arena_half": self.mArenaHalf, "robot_yaw": self.mRobotYaw,
+                "robot_x": self.mRobotX, "robot_y": self.mRobotY}
 
 
-def sample_scene(seed: int, n_min: int = 3, n_max: int = 3,
-                 arena_half: float = 3.0, min_sep: float = 0.7,
-                 max_view_halfangle_deg: float = 36.0,
-                 near: float = 1.3, far_frac: float = 0.85) -> SceneSpec:
+def sampleScene(seed: int, nMin: int = N_OBJECTS, nMax: int = N_OBJECTS, arenaHalf: float = ARENA_HALF_M,
+                minSep: float = MIN_SEPARATION_M, maxViewHalfAngleDeg: float = VIEW_HALF_ANGLE_DEG,
+                near: float = NEAR_M, farFrac: float = FAR_FRACTION) -> SceneSpec:
     """Deterministically sample a scene from a seed.
 
-    The robot starts AT A WALL of the arena, facing inward; the objects are then
-    placed at RANDOM positions in front of it (inside the arena, within the ego
-    camera's field of view), so all 3 are visible at spawn and lie ahead to walk
-    toward.
-
-    Steps:
-      1. pick a random wall + random point along it -> robot spawn
-      2. robot faces the arena interior (toward the opposite wall), with a small
-         random yaw jitter
-      3. place 3 objects at random range/bearing in the frontal cone, kept inside
-         the arena and non-overlapping
+    1. pick a random wall and a random point along it -> robot spawn
+    2. the robot faces the arena interior (toward the opposite wall), with a small random yaw jitter
+    3. place the objects at random range/bearing in the frontal cone, inside the arena and non-overlapping,
+       so all of them are visible at spawn and lie ahead to walk toward
     """
-    rng = np.random.default_rng(seed)
-    n = int(rng.integers(n_min, n_max + 1))
+    tRng = np.random.default_rng(seed)
+    tCount = int(tRng.integers(nMin, nMax + 1))
 
-    identities = [(c, s) for c in COLORS for s in SHAPES]
-    rng.shuffle(identities)
-    identities = identities[:n]
+    tIdentities = [(tColor, tShape) for tColor in COLORS for tShape in SHAPES]
+    tRng.shuffle(tIdentities)
+    tIdentities = tIdentities[:tCount]
 
     # 1) robot on a random wall, 2) facing inward (+ jitter)
-    wall = int(rng.integers(4))          # 0:-x, 1:+x, 2:-y, 3:+y
-    margin = 0.35
-    span = arena_half - 0.8
-    if wall == 0:    # left wall (-x), face +x
-        rx, ry, base_yaw = -arena_half + margin, float(rng.uniform(-span, span)), 0.0
-    elif wall == 1:  # right wall (+x), face -x
-        rx, ry, base_yaw = arena_half - margin, float(rng.uniform(-span, span)), np.pi
-    elif wall == 2:  # bottom wall (-y), face +y
-        rx, ry, base_yaw = float(rng.uniform(-span, span)), -arena_half + margin, np.pi / 2
-    else:            # top wall (+y), face -y
-        rx, ry, base_yaw = float(rng.uniform(-span, span)), arena_half - margin, -np.pi / 2
-    yaw = float(base_yaw + rng.uniform(-0.12, 0.12))
+    tWall = int(tRng.integers(4))          # 0:-x, 1:+x, 2:-y, 3:+y
+    tMargin = SPAWN_WALL_MARGIN_M
+    tSpan = arenaHalf - SPAWN_END_MARGIN_M
+    if tWall == 0:    # left wall (-x), face +x
+        tRx, tRy, tBaseYaw = -arenaHalf + tMargin, float(tRng.uniform(-tSpan, tSpan)), 0.0
+    elif tWall == 1:  # right wall (+x), face -x
+        tRx, tRy, tBaseYaw = arenaHalf - tMargin, float(tRng.uniform(-tSpan, tSpan)), np.pi
+    elif tWall == 2:  # bottom wall (-y), face +y
+        tRx, tRy, tBaseYaw = float(tRng.uniform(-tSpan, tSpan)), -arenaHalf + tMargin, np.pi / 2
+    else:             # top wall (+y), face -y
+        tRx, tRy, tBaseYaw = float(tRng.uniform(-tSpan, tSpan)), arenaHalf - tMargin, -np.pi / 2
+    tYaw = float(tBaseYaw + tRng.uniform(-SPAWN_YAW_JITTER_RAD, SPAWN_YAW_JITTER_RAD))
 
     # 3) objects in the frontal cone, inside the arena, non-overlapping
-    half_view = np.deg2rad(max_view_halfangle_deg)
-    # how far ahead we can place things before hitting the far wall
-    reach = (2 * arena_half - margin) * far_frac
-    objs: list[ObjSpec] = []
-    placed: list[tuple[float, float]] = []
-    for (color, shape) in identities:
-        for _ in range(500):
-            rng_d = float(rng.uniform(near, max(near + 0.5, reach)))
-            bearing = float(rng.uniform(-half_view, half_view))
-            x = rx + rng_d * np.cos(yaw + bearing)
-            y = ry + rng_d * np.sin(yaw + bearing)
-            if abs(x) > arena_half - 0.4 or abs(y) > arena_half - 0.4:
+    tHalfView = np.deg2rad(maxViewHalfAngleDeg)
+    # how far ahead objects can be placed before hitting the far wall
+    tReach = (2 * arenaHalf - tMargin) * farFrac
+    tObjects: list[ObjSpec] = []
+    tPlaced: list[tuple[float, float]] = []
+    for (tColor, tShape) in tIdentities:
+        for _ in range(PLACEMENT_ATTEMPTS):
+            tRange = float(tRng.uniform(near, max(near + MIN_RANGE_SPAN_M, tReach)))
+            tBearing = float(tRng.uniform(-tHalfView, tHalfView))
+            tX = tRx + tRange * np.cos(tYaw + tBearing)
+            tY = tRy + tRange * np.sin(tYaw + tBearing)
+            if abs(tX) > arenaHalf - OBJECT_WALL_MARGIN_M or abs(tY) > arenaHalf - OBJECT_WALL_MARGIN_M:
                 continue
-            if all(((x - px) ** 2 + (y - py) ** 2) ** 0.5 >= min_sep
-                   for px, py in placed):
+            if all(((tX - tPx) ** 2 + (tY - tPy) ** 2) ** 0.5 >= minSep for tPx, tPy in tPlaced):
                 break
-        placed.append((x, y))
-        objs.append(ObjSpec(color=color, shape=shape, x=float(x), y=float(y),
-                            z=SHAPES[shape][2]))
+        tPlaced.append((tX, tY))
+        tObjects.append(ObjSpec(mColor=tColor, mShape=tShape, mX=float(tX), mY=float(tY), mZ=SHAPES[tShape][2]))
 
-    return SceneSpec(seed=seed, objects=objs, arena_half=arena_half,
-                     robot_yaw=yaw, robot_x=float(rx), robot_y=float(ry))
-
-
-# ---- MJCF assembly --------------------------------------------------------
-
-def _ego_camera_xml() -> str:
-    """Egocentric RGBD camera, mounted on torso at head height, looking +x."""
-    # mounted on torso_link; offset puts it roughly at head, tilted slightly down
-    # wide FOV, slight downward tilt so floor-level objects sit in the frame.
-    # pos a bit higher (head) and looking ~12 deg down toward the frontal fan.
-    return (
-        '<camera name="ego" mode="fixed" pos="0.08 0 0.55" '
-        'xyaxes="0 -1 0 0.22 0 1" fovy="95"/>'
-    )
+    return SceneSpec(mSeed=seed, mObjects=tObjects, mArenaHalf=arenaHalf,
+                     mRobotYaw=tYaw, mRobotX=float(tRx), mRobotY=float(tRy))
 
 
-def build_mjcf(scene: SceneSpec) -> str:
-    """Return a full MJCF XML string for the given scene.
+# ---- MJCF pieces shared with navigation/integrated_scene.py ------------------
 
-    Strategy: load g1.xml, inject ego camera into torso_link, then wrap with a
-    worldbody that adds floor, walls, third-person camera, and objects.
+def spawnQpos(qposText: str, scene: SceneSpec) -> str:
+    """Keyframe qpos text with the free-joint base [x, y, z, qw, qx, qy, qz] set to the scene's spawn (z kept)."""
+    tValues = qposText.split()
+    tHalfYaw = scene.mRobotYaw / 2.0
+    tValues[0] = f"{scene.mRobotX:.4f}"
+    tValues[1] = f"{scene.mRobotY:.4f}"
+    tValues[3] = f"{math.cos(tHalfYaw):.5f}"
+    tValues[4] = "0"
+    tValues[5] = "0"
+    tValues[6] = f"{math.sin(tHalfYaw):.5f}"
+    return " ".join(tValues)
+
+
+def thirdPersonCameraXml(arenaHalf: float) -> str:
+    """Fixed high overview camera behind/above the -y side that frames the whole arena."""
+    return (f'<camera name="thirdperson" mode="fixed" '
+            f'pos="0 {-(arenaHalf + 4.0):.2f} {arenaHalf + 4.5:.2f}" '
+            f'xyaxes="1 0 0 0 0.66 0.75" fovy="55"/>')
+
+
+def wallGeomXmls(arenaHalf: float) -> list[str]:
+    """Four thin boxes (+y, -y, +x, -x) that keep the robot and the objects in the arena."""
+    tWalls = [
+        (0, arenaHalf, arenaHalf, WALL_THICKNESS_M),
+        (0, -arenaHalf, arenaHalf, WALL_THICKNESS_M),
+        (arenaHalf, 0, WALL_THICKNESS_M, arenaHalf),
+        (-arenaHalf, 0, WALL_THICKNESS_M, arenaHalf),
+    ]
+    return [f'<geom name="wall_{tIndex}" type="box" pos="{tCx} {tCy} {WALL_HEIGHT_M / 2}" '
+            f'size="{tSx} {tSy} {WALL_HEIGHT_M / 2}" rgba="0.5 0.5 0.55 1" contype="1" conaffinity="1"/>'
+            for tIndex, (tCx, tCy, tSx, tSy) in enumerate(tWalls)]
+
+
+def objectGeomXml(index: int, obj: ObjSpec) -> str:
+    """Static geom (no freejoint: the scene is fully static) for one object."""
+    tGeomType, tSize, _ = SHAPES[obj.mShape]
+    tSizeText = " ".join(str(tS) for tS in tSize if tS > 0) or DEFAULT_SIZE_TEXT
+    tRgba = " ".join(str(tC) for tC in COLORS[obj.mColor])
+    return (f'<geom name="obj_{index}_{obj.mColor}_{obj.mShape}" type="{tGeomType}" '
+            f'pos="{obj.mX} {obj.mY} {obj.mZ}" size="{tSizeText}" rgba="{tRgba}" '
+            f'contype="1" conaffinity="1"/>')
+
+
+def buildMjcf(scene: SceneSpec) -> str:
+    """Full MJCF XML string for the scene, built around the vendored Menagerie g1.xml.
+
+    Load g1.xml, inject the ego camera into torso_link, set the spawn pose in the first keyframe, then wrap it with
+    a worldbody that adds floor, walls, third-person camera and objects. meshdir is absolute (see main()).
     """
-    tree = ET.parse(G1_XML)
-    root = tree.getroot()
+    tTree = ET.parse(G1_XML)
+    tRoot = tTree.getroot()
 
-    # 1) inject ego camera onto torso_link
-    torso = None
-    for body in root.iter("body"):
-        if body.get("name") == "torso_link":
-            torso = body
-            break
-    if torso is None:
+    # 1) inject the ego camera onto torso_link
+    tTorso = next((tBody for tBody in tRoot.iter("body") if tBody.get("name") == "torso_link"), None)
+    if tTorso is None:
         raise RuntimeError("torso_link not found in g1.xml")
-    cam = ET.fromstring(_ego_camera_xml())
-    torso.append(cam)
+    tTorso.append(ET.fromstring(EGO_CAMERA_XML))
 
-    # 2) set robot spawn pose (x, y, yaw) by overriding the first 7 qpos of the
-    #    'stand' keyframe: [x, y, z, qw, qx, qy, qz]. z stays from the keyframe.
-    import math
-    for key in root.iter("key"):
-        qpos = key.get("qpos")
-        if qpos is None:
+    # 2) robot spawn pose (x, y, yaw): the first keyframe with a 7+-element qpos; z stays from the keyframe
+    for tKey in tRoot.iter("key"):
+        tQpos = tKey.get("qpos")
+        if tQpos is None or len(tQpos.split()) < 7:
             continue
-        vals = qpos.split()
-        if len(vals) < 7:
-            continue
-        z = vals[2]
-        half_yaw = scene.robot_yaw / 2.0
-        qw, qz = math.cos(half_yaw), math.sin(half_yaw)
-        vals[0] = f"{scene.robot_x:.4f}"
-        vals[1] = f"{scene.robot_y:.4f}"
-        vals[2] = z
-        vals[3] = f"{qw:.5f}"; vals[4] = "0"; vals[5] = "0"; vals[6] = f"{qz:.5f}"
-        key.set("qpos", " ".join(vals))
+        tKey.set("qpos", spawnQpos(tQpos, scene))
         break
 
-    half = scene.arena_half
+    # 3) additive worldbody pieces: third-person camera, walls, objects
+    tExtra = ET.Element("worldbody")
+    tExtra.append(ET.fromstring(thirdPersonCameraXml(scene.mArenaHalf)))
+    for tWallXml in wallGeomXmls(scene.mArenaHalf):
+        tExtra.append(ET.fromstring(tWallXml))
+    for tIndex, tObj in enumerate(scene.mObjects):
+        tExtra.append(ET.fromstring(objectGeomXml(tIndex, tObj)))
 
-    # 3) build the additive worldbody pieces (floor/walls/objects/camera)
-    extra = ET.Element("worldbody")
-
-    # third-person camera: a fixed high overview that frames the WHOLE arena
-    # (robot + all objects + walls), placed back/above one corner looking down.
-    h = scene.arena_half
-    tpcam = ET.fromstring(
-        f'<camera name="thirdperson" mode="fixed" '
-        f'pos="0 {-(h + 4.0):.2f} {h + 4.5:.2f}" '
-        f'xyaxes="1 0 0 0 0.66 0.75" fovy="55"/>'
-    )
-    extra.append(tpcam)
-
-    # walls (4 thin boxes) so objects/robot stay in arena
-    wall_t = 0.05
-    wall_h = 0.3
-    walls = [
-        (0,  half, half, wall_t),   # +y
-        (0, -half, half, wall_t),   # -y
-        ( half, 0, wall_t, half),   # +x
-        (-half, 0, wall_t, half),   # -x
-    ]
-    for i, (cx, cy, sx, sy) in enumerate(walls):
-        g = ET.fromstring(
-            f'<geom name="wall_{i}" type="box" pos="{cx} {cy} {wall_h/2}" '
-            f'size="{sx} {sy} {wall_h/2}" rgba="0.5 0.5 0.55 1" contype="1" conaffinity="1"/>'
-        )
-        extra.append(g)
-
-    # objects
-    for i, o in enumerate(scene.objects):
-        gtype, size, _ = SHAPES[o.shape]
-        size_str = " ".join(str(s) for s in size if s > 0) or "0.05"
-        rgba = " ".join(str(c) for c in COLORS[o.color])
-        # static objects: no freejoint (the scene is fully static)
-        g = ET.fromstring(
-            f'<geom name="obj_{i}_{o.color}_{o.shape}" type="{gtype}" '
-            f'pos="{o.x} {o.y} {o.z}" size="{size_str}" rgba="{rgba}" '
-            f'contype="1" conaffinity="1"/>'
-        )
-        extra.append(g)
-
-    # 4) assemble final document: reuse g1 asset/option/default, add scene assets
-    mj = ET.Element("mujoco", attrib={"model": f"g1nav_scene_{scene.seed}"})
-
-    # visual + skybox/ground assets
-    vis = ET.fromstring(
+    # 4) assemble the final document: visual + scene assets + floor, then everything from g1.xml, then the extras
+    tMujoco = ET.Element("mujoco", attrib={"model": f"g1nav_scene_{scene.mSeed}"})
+    tMujoco.append(ET.fromstring(
         '<visual>'
         '<headlight diffuse="0.6 0.6 0.6" ambient="0.2 0.2 0.2" specular="0.3 0.3 0.3"/>'
         '<rgba haze="0.15 0.25 0.35 1"/>'
         '<global azimuth="140" elevation="-20" offwidth="640" offheight="480"/>'
         '</visual>'
-    )
-    mj.append(vis)
-
-    scene_assets = ET.fromstring(
+    ))
+    tMujoco.append(ET.fromstring(
         '<asset>'
         '<texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" '
         'width="512" height="3072"/>'
@@ -253,60 +249,55 @@ def build_mjcf(scene: SceneSpec) -> str:
         '<material name="groundplane" texture="groundplane" texuniform="true" '
         'texrepeat="5 5" reflectance="0.2"/>'
         '</asset>'
-    )
-    mj.append(scene_assets)
-
-    floor = ET.fromstring(
+    ))
+    tMujoco.append(ET.fromstring(
         '<worldbody><geom name="floor" size="0 0 0.05" type="plane" '
         'material="groundplane" contype="1" conaffinity="1"/></worldbody>'
-    )
-    mj.append(floor)
+    ))
+    # everything from g1.xml (compiler, option, default, asset, worldbody, actuator, ...); meshdir made absolute so
+    # the wrapped document finds the STL files
+    for tChild in list(tRoot):
+        if tChild.tag == "compiler":
+            tChild.set("meshdir", os.path.join(G1_DIR, "assets"))
+        tMujoco.append(tChild)
+    tMujoco.append(tExtra)
+    return ET.tostring(tMujoco, encoding="unicode")
 
-    # bring over everything from g1.xml (compiler, option, default, asset, worldbody, actuator...)
-    # We must set meshdir to absolute so the wrapped doc finds STL files.
-    for child in list(root):
-        if child.tag == "compiler":
-            child.set("meshdir", os.path.join(G1_DIR, "assets"))
-        mj.append(child)
 
-    # append scene extras (objects/walls/cameras) as an extra worldbody
-    mj.append(extra)
+def main(argv: list[str] | None = None) -> int:
+    tParser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    tParser.add_argument("--seed", type=int, default=0)
+    tParser.add_argument("--out", type=str, default="")
+    tParser.add_argument("--validate", action="store_true")
+    tArgs = tParser.parse_args(argv)
 
-    return ET.tostring(mj, encoding="unicode")
+    tScene = sampleScene(tArgs.seed)
+    print(f"[scene_gen] seed={tScene.mSeed} n_objects={len(tScene.mObjects)} "
+          f"robot_yaw={tScene.mRobotYaw:.2f}")
+    for tObj in tScene.mObjects:
+        print(f"    {tObj.label:18s} @ ({tObj.mX:+.2f},{tObj.mY:+.2f})")
+
+    tXml = buildMjcf(tScene)
+    tOut = tArgs.out or os.path.join(str(ASSETS_DIR), f"scene_seed{tArgs.seed}.xml")
+    # The written file stores meshdir relative to its own directory (MuJoCo resolves a relative meshdir against the
+    # model file when loaded with from_xml_path), so no machine-specific absolute path ends up in the scene file.
+    # buildMjcf() itself keeps the absolute meshdir for callers that write the XML elsewhere.
+    tAbsMeshdir = os.path.join(G1_DIR, "assets")
+    tRelMeshdir = os.path.relpath(tAbsMeshdir, os.path.dirname(os.path.abspath(tOut)))
+    tXml = tXml.replace(f'meshdir="{tAbsMeshdir}"', f'meshdir="{tRelMeshdir}"')
+    with open(tOut, "w") as tFile:
+        tFile.write(tXml)
+    print(f"[scene_gen] wrote {tOut} ({len(tXml)} chars)")
+
+    if tArgs.validate:
+        import mujoco
+        tModel = mujoco.MjModel.from_xml_path(tOut)
+        tData = mujoco.MjData(tModel)
+        mujoco.mj_forward(tModel, tData)
+        tCameras = [mujoco.mj_id2name(tModel, mujoco.mjtObj.mjOBJ_CAMERA, tI) for tI in range(tModel.ncam)]
+        print(f"[scene_gen] VALID: nq={tModel.nq} nu={tModel.nu} ncam={tModel.ncam} cameras={tCameras}")
+    return 0
 
 
 if __name__ == "__main__":
-    import argparse
-    p = argparse.ArgumentParser()
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--out", type=str, default="")
-    p.add_argument("--validate", action="store_true")
-    args = p.parse_args()
-
-    scene = sample_scene(args.seed)
-    print(f"[scene_gen] seed={scene.seed} n_objects={len(scene.objects)} "
-          f"robot_yaw={scene.robot_yaw:.2f}")
-    for o in scene.objects:
-        print(f"    {o.label:18s} @ ({o.x:+.2f},{o.y:+.2f})")
-
-    xml = build_mjcf(scene)
-    out = args.out or os.path.join(str(ASSETS_DIR), f"scene_seed{args.seed}.xml")
-    # The written file stores meshdir relative to its own directory (MuJoCo resolves a
-    # relative meshdir against the model file when loaded with from_xml_path), so no
-    # machine-specific absolute path ends up in the scene file. build_mjcf() itself keeps
-    # the absolute meshdir for callers that write the XML elsewhere.
-    abs_meshdir = os.path.join(G1_DIR, "assets")
-    rel_meshdir = os.path.relpath(abs_meshdir, os.path.dirname(os.path.abspath(out)))
-    xml = xml.replace(f'meshdir="{abs_meshdir}"', f'meshdir="{rel_meshdir}"')
-    with open(out, "w") as f:
-        f.write(xml)
-    print(f"[scene_gen] wrote {out} ({len(xml)} chars)")
-
-    if args.validate:
-        import mujoco
-        m = mujoco.MjModel.from_xml_path(out)
-        d = mujoco.MjData(m)
-        mujoco.mj_forward(m, d)
-        ncam = m.ncam
-        cams = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i) for i in range(ncam)]
-        print(f"[scene_gen] VALID: nq={m.nq} nu={m.nu} ncam={ncam} cameras={cams}")
+    raise SystemExit(main())

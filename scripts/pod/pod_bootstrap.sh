@@ -43,7 +43,7 @@ pip install -q playground   # mujoco_playground PyPI name
 # media + utils
 pip install -q mediapy imageio imageio-ffmpeg tqdm wandb pyyaml
 
-echo "--- pip: VLA stack (transformers, peft, accelerate, etc.) ---"
+echo "--- pip: GR00T N1.6 Eagle stack (transformers, peft, accelerate, etc.; optional, logging only) ---"
 pip install -q "transformers>=4.45" accelerate peft safetensors einops timm sentencepiece
 
 echo "--- versions ---"

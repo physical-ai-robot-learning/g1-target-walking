@@ -18,7 +18,6 @@ from conftest import ROOT
 from g1nav.envs import instructions as ins
 from g1nav.envs import scene_gen as sg
 from g1nav.navigation import action_module as am
-from g1nav.navigation import navigate as nav
 
 GOLDEN = os.path.join(ROOT, "tests", "golden", "characterization.json")
 REGEN = os.environ.get("G1NAV_REGEN_GOLDEN") == "1"
@@ -26,33 +25,33 @@ SEEDS = range(20)
 
 
 def _scene(seed):
-    s = sg.sample_scene(seed)
-    return {"seed": s.seed, "arena_half": s.arena_half, "robot": [s.robot_x, s.robot_y, s.robot_yaw],
-            "objects": [[o.color, o.shape, o.x, o.y, o.z, o.label] for o in s.objects]}
+    s = sg.sampleScene(seed)
+    return {"seed": s.mSeed, "arena_half": s.mArenaHalf, "robot": [s.mRobotX, s.mRobotY, s.mRobotYaw],
+            "objects": [[o.mColor, o.mShape, o.mX, o.mY, o.mZ, o.label] for o in s.mObjects]}
 
 
 def _mjcf_sha(seed):
-    xml = sg.build_mjcf(sg.sample_scene(seed))
+    xml = sg.buildMjcf(sg.sampleScene(seed))
     xml = xml.replace(os.path.join(sg.G1_DIR, "assets"), "<G1_DIR>/assets")
     return hashlib.sha256(xml.encode()).hexdigest()
 
 
 def _instruction(seed):
-    i = ins.sample_instruction(sg.sample_scene(seed), np.random.default_rng(1000 + seed))
-    return [i.template_id, i.text, i.target_label, list(i.target_xy), i.params]
+    i = ins.sampleInstruction(sg.sampleScene(seed), np.random.default_rng(1000 + seed))
+    return [i.mTemplateId, i.mText, i.mTargetLabel, list(i.mTargetXy), i.mParams]
 
 
 def _success_cases():
-    scene = sg.sample_scene(3)
+    scene = sg.sampleScene(3)
     rows = []
     for k in range(12):
-        i = ins.sample_instruction(scene, np.random.default_rng(k))
-        tx, ty = i.target_xy
+        i = ins.sampleInstruction(scene, np.random.default_rng(k))
+        tx, ty = i.mTargetXy
         straight = [(tx - 2 + 0.25 * j, ty, 0.0) for j in range(9)]          # passes through the target
         turn_l = straight + [(tx + 0.1, ty, 0.0), (tx + 0.2, ty + 0.1, 1.3)]   # +74 deg after passing
         turn_r = straight + [(tx + 0.1, ty, 0.0), (tx + 0.2, ty - 0.1, -1.3)]
         far = [(tx + 5, ty + 5, 0.0), (tx + 4, ty + 5, 0.0)]
-        rows.append([i.template_id, i.params, [i.succeeded(t, scene.objects) for t in (straight, turn_l, turn_r, far)]])
+        rows.append([i.mTemplateId, i.mParams, [i.succeeded(t, scene.mObjects) for t in (straight, turn_l, turn_r, far)]])
     return rows
 
 
@@ -60,18 +59,18 @@ def _commands():
     out = []
     for b in (-170.0, -90.0, -40.0, -39.9, -10.0, 0.0, 5.0, 39.9, 40.0, 120.0, 180.0):
         for d in (0.0, 0.3, 0.55, 0.56, 1.0, 3.0):
-            out.append([b, d, list(am.goal_to_command(b, d))])
+            out.append([b, d, list(am.goalToCommand(b, d))])
     return out
 
 
 def _geometry():
     rows = []
     for rx, ry, ryaw, b, d in [(0, 0, 0.0, 25.0, 2.5), (1.0, -2.0, 0.7, 25.0, 2.5), (-2.65, 1.1, 3.0, -170.0, 0.4)]:
-        gx, gy = am.ego_to_world(rx, ry, ryaw, b, d)
-        rows.append([float(gx), float(gy), list(am.world_to_ego(rx, ry, ryaw, gx, gy))])
+        gx, gy = am.egoToWorld(rx, ry, ryaw, b, d)
+        rows.append([float(gx), float(gy), list(am.worldToEgo(rx, ry, ryaw, gx, gy))])
     q = [[0.1, -0.2, 0.75, 0.9, 0.1, -0.05, 0.42], [1, 2, 0.7, 1, 0, 0, 0], [0, 0, 0, 0.0, 0.0, 0.0, 1.0]]
-    rows.append([list(am.robot_pose_from_qpos(np.array(x, dtype=float))) for x in q])
-    rows.append([float(nav.quat_yaw(np.array(x[3:7], dtype=float))) for x in q])
+    rows.append([list(am.robotPoseFromQpos(np.array(x, dtype=float))) for x in q])
+    rows.append([float(am.quatYaw(np.array(x[3:7], dtype=float))) for x in q])  # was navigate.quat_yaw
     return rows
 
 
@@ -80,7 +79,7 @@ def _navigator_rollouts():
     rows = []
     for bearing, dist, dt in [(25.0, 2.5, 0.05), (120.0, 2.5, 0.02), (-150.0, 4.0, 0.02)]:
         n = am.Navigator()
-        goal = n.lock_goal_from_ego(0, 0, 0.0, bearing, dist)
+        goal = n.lockGoalFromEgo(0, 0, 0.0, bearing, dist)
         pose = np.zeros(3)
         cmds = []
         for step in range(2000):
@@ -92,7 +91,7 @@ def _navigator_rollouts():
             if done:
                 break
         sha = hashlib.sha256(repr(cmds).encode()).hexdigest()
-        rows.append([list(map(float, goal)), step, pose.tolist(), n.reached, sha])
+        rows.append([list(map(float, goal)), step, pose.tolist(), n.mReached, sha])
     return rows
 
 

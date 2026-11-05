@@ -1,4 +1,6 @@
-# videos/: the three recorded demo episodes
+# media/: the three recorded demo episodes
+
+(Was `videos/VIDEOS.md` before the 2026-11 layout refactor; `media/README.md` is the file the claims check reads.)
 
 Each episode is one closed-loop run of the pipeline as it exists in the code:
 **keyword target selection (target position from the generated scene) → Navigator → PPO
@@ -32,6 +34,6 @@ Notes on the cognition JSON files:
 Regenerate an episode (GPU machine with the pod layout, or the portable runner):
 
 ```bash
-bash code/navigation/run_pipeline_n16.sh 0 "go to the orange cylinder"
-python code/navigation/g1nav_run.py --seed 0 --instruction "go to the orange cylinder"
+bash scripts/pod/run_pipeline_n16.sh 0 "go to the orange cylinder"
+python -m g1nav.navigation.pipeline --seed 0 --instruction "go to the orange cylinder"
 ```

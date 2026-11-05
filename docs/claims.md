@@ -8,8 +8,13 @@ under "CV-level claims" are the ones such a document would be tempted to make.
 
 Status: **SUPPORTED** (evidence in the repository, re-checked), **PARTLY** (true only with the
 stated rewording), **NOT SUPPORTED** (contradicted by, or absent from, the repository).
-`python analysis/verify_claims.py` re-checks every number of the current README, report and
-`videos/VIDEOS.md` automatically (70 checks).
+`python -m analysis.verify_claims` re-checks every number of the current README, report and
+`media/README.md` automatically (70 checks).
+
+> **Paths in this audit** (`code/...`, `checkpoint/...`, `videos/...`, `dataset/NOTE.md`, with line numbers) refer to
+> the tree as audited, i.e. commit `702a60a`, before the 2026-11 layout refactor. They are left as written; the
+> old → new path map is in [refactor_2026-11.md](refactor_2026-11.md) (e.g. `code/navigation/navigate.py` →
+> `src/g1nav/navigation/navigate.py`, `checkpoint/` → `results/checkpoints/`, `videos/VIDEOS.md` → `media/README.md`).
 
 ## What the recorded demos actually used
 
