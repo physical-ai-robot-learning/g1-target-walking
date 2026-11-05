@@ -10,14 +10,17 @@ on:
   pull_request:
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    # Goldens were recorded on Apple Silicon (Linux libm differs in the last bit); same platform + pinned versions.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install (package + test and dashboard extras; no simulator)
-        run: python -m pip install -e ".[test,dashboard]"
+        run: |
+          python -m pip install -r configs/envs/requirements-test.txt
+          python -m pip install -e . --no-deps
       - name: Byte-compile every Python file
         run: python -m compileall -q -x '/\.git/' .
       - name: Claims check (README, archived report, media/README.md)
