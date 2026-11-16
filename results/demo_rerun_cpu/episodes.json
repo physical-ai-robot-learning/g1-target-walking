@@ -1,0 +1,37 @@
+{
+  "checkpoint": "checkpoint/walk_t4_latest.pkl",
+  "seconds": 12.0,
+  "jax_cpu": true,
+  "episodes": [
+    {
+      "seed": 0,
+      "instruction": "go to the orange cylinder",
+      "target": "orange cylinder",
+      "reached": true,
+      "final_dist_m": 0.39,
+      "torso_z_m": 0.75,
+      "frames": 630,
+      "fell": false
+    },
+    {
+      "seed": 1,
+      "instruction": "go to the red cube",
+      "target": "red cube",
+      "reached": true,
+      "final_dist_m": 0.41,
+      "torso_z_m": 0.76,
+      "frames": 386,
+      "fell": false
+    },
+    {
+      "seed": 2,
+      "instruction": "go to the purple cylinder",
+      "target": "purple cylinder",
+      "reached": true,
+      "final_dist_m": 0.54,
+      "torso_z_m": 0.75,
+      "frames": 668,
+      "fell": false
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+# Data: there is no collected dataset, by design
+
+(Was `dataset/NOTE.md` before the 2026-11 layout refactor.)
+
+This project **collects no training data**, because nothing in the pipeline is
+trained on a dataset:
+
+- **Grounding (what/where).** The instructed target is picked by keyword
+  overlap between the instruction and the scene's object labels, and its
+  position is taken from the generated scene in the recorded demos (see the
+  README's "Scope and limitations"). The frozen GR00T N1.6 Eagle encoder is run
+  on the ego frame but not trained. Nothing here is trained, so there is no
+  grounding dataset.
+- **Control (how to move).** The walking policy is trained by **on-policy RL
+  (PPO) entirely inside the MuJoCo (MJX) simulator** — `G1JoystickFlatTerrain`,
+  8192 parallel environments generating transitions on the fly each step. There
+  is no offline/behavior-cloning dataset; the "data" exists only transiently
+  inside the RL rollout buffers during training and is never stored.
+
+So there is no training dataset to ship or regenerate; what matters is the
+evaluation setup below.
+
+## What *is* deterministic and regenerable: the evaluation suite
+
+The only regenerable artifacts are the **evaluation scenes + instructions**,
+produced from integer seeds (no large assets shipped) by the scene and instruction generators of
+the code release (available on request):
+
+- `src/g1nav/envs/scene_gen.py`  — seed → exact scene (objects, poses, cameras, MJCF).
+- `src/g1nav/envs/instructions.py` — seed → instruction text + success criterion.
+
+The recorded demo episodes use seeds **0, 1 and 2** (extend the range to test
+more). Because everything is seeded, anyone can regenerate the identical scenes
+without image/trajectory files being shipped.
+
+## Where the real results live
+
+- `results/checkpoints/walk_t4_latest.pkl` — the trained controller (the only learned weights;
+  available on request with the code).
+- `src/g1nav/locomotion/walk_eval.py` (code release) — truthful raw-env evaluation (forward velocity,
+  torso height, net distance; no AutoReset masking); its CPU outputs are in `results/walk_sweep_cpu/`.
+- `media/` — closed-loop instruction-following episodes (ego ∥ third-person).

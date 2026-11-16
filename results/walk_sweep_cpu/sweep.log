@@ -1,0 +1,18 @@
+sweeping 16 checkpoints (cmd_vx=0.6, raw env, 250 steps)
+            0  net= 0.45m  fwd_vel=+0.36  min_z=-0.78  FALLS
+     10321920  net= 0.55m  fwd_vel=+0.28  min_z=-0.78  FALLS
+     20643840  net= 0.59m  fwd_vel=+0.41  min_z=-0.76  FALLS
+     30965760  net= 0.76m  fwd_vel=-0.27  min_z=-0.76  FALLS
+     41287680  net= 1.54m  fwd_vel=+0.32  min_z= 0.73  WALKS
+     51609600  net= 1.95m  fwd_vel=+0.39  min_z= 0.74  WALKS
+     61931520  net= 2.51m  fwd_vel=+0.50  min_z= 0.73  WALKS
+     72253440  net= 2.71m  fwd_vel=+0.55  min_z= 0.73  WALKS
+     82575360  net= 2.70m  fwd_vel=+0.54  min_z= 0.74  WALKS
+     92897280  net= 2.80m  fwd_vel=+0.56  min_z= 0.74  WALKS
+    103219200  net= 2.78m  fwd_vel=+0.56  min_z= 0.74  WALKS
+    113541120  net= 2.75m  fwd_vel=+0.55  min_z= 0.74  WALKS
+    123863040  net= 2.69m  fwd_vel=+0.54  min_z= 0.74  WALKS
+    134184960  net= 2.78m  fwd_vel=+0.56  min_z= 0.74  WALKS
+    144506880  net= 2.89m  fwd_vel=+0.58  min_z= 0.74  WALKS
+    154828800  net= 2.59m  fwd_vel=+0.52  min_z= 0.74  WALKS
+BEST fwd_vel: step=144506880 fwd_vel=0.58 (WALKS)
