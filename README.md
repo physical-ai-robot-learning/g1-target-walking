@@ -19,7 +19,7 @@ Part of **[physical-ai-robot-learning](https://github.com/physical-ai-robot-lear
 **Technical report:** [`report/report_en.pdf`](report/report_en.pdf) (earlier Markdown engineering report in [`report/archive/`](report/archive/report.md)) ·
 **Results:** [`results/`](results/README.md) ·
 **Claims audit:** [`docs/claims.md`](docs/claims.md) ·
-**Code:** [available on request](#code-availability) ·
+**Code:** [not publicly released](#code-availability) ·
 **Third-party licences:** [`docs/third_party.md`](docs/third_party.md) · **Provenance:** [`docs/provenance.md`](docs/provenance.md) · status: finished prototype, 2026-11-01
 
 ![go to the orange cylinder: third-person view (left) and ego camera (right)](media/seed0_go-to-the-orange-cylinder.gif)
@@ -65,9 +65,10 @@ Part of **[physical-ai-robot-learning](https://github.com/physical-ai-robot-lear
 
 The source code (PPO walking-policy training and raw-environment evaluation, the Navigator and
 closed-loop episode runner, seeded scene generation, and the evaluation / claims-check scripts)
-and the trained checkpoints are available on request: please open an issue in this repository.
-Every number in the technical report was re-measured by a claims-check script against the
-result files; that script is included with the code on request.
+and the trained checkpoints are not publicly released. Research access may be considered upon
+reasonable request (please open an issue in this repository). Every number in the technical
+report was re-measured by a claims-check script against the result files; that script is part
+of the non-public code.
 
 ## What is in this repository
 
@@ -96,7 +97,7 @@ velocity command is in the robot's heading frame.
 
 ## Results
 
-The claims-check script (part of the code, available on request) recomputes every number in this
+The claims-check script (part of the non-public code) recomputes every number in this
 README, in [`report/archive/report.md`](report/archive/report.md) and in [`media/README.md`](media/README.md)
 from the result files (checkpoint pickles read without JAX, metrics JSONL, rollout JSON, cognition
 JSON, MP4/GIF frame counts, the CPU re-measurements) and exits non-zero on any mismatch. A second
@@ -144,7 +145,7 @@ describes a CV + depth localisation step that was not used (see `media/README.md
 Earlier versions of this README and of the report presented the Eagle encoder as the grounding
 stage; the repository history before 2026-09-27 reflects that wording. The code moved from `code/` to the
 `src/g1nav` package in 2026-11 without behaviour change. The code paths named in this README
-refer to the code release, which is available on request.
+refer to the non-public code.
 
 ## Design intuition (optional)
 
@@ -169,7 +170,7 @@ Details and licences: [`docs/third_party.md`](docs/third_party.md).
 
 ## License and citation
 
-The documentation, report, results and media in this repository (and the code, when shared on request) are licensed under the
+The documentation, report, results and media in this repository are licensed under the
 **PolyForm Noncommercial License 1.0.0** ([LICENSE](LICENSE)): free for research, teaching,
 personal and other noncommercial use; commercial use requires a separate written agreement with
 the author. Third-party parts keep their own licences (the Unitree G1 model in the code release:

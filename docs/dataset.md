@@ -24,7 +24,7 @@ evaluation setup below.
 
 The only regenerable artifacts are the **evaluation scenes + instructions**,
 produced from integer seeds (no large assets shipped) by the scene and instruction generators of
-the code release (available on request):
+the code release (not publicly released):
 
 - `src/g1nav/envs/scene_gen.py`  — seed → exact scene (objects, poses, cameras, MJCF).
 - `src/g1nav/envs/instructions.py` — seed → instruction text + success criterion.
@@ -36,7 +36,7 @@ without image/trajectory files being shipped.
 ## Where the real results live
 
 - `results/checkpoints/walk_t4_latest.pkl` — the trained controller (the only learned weights;
-  available on request with the code).
+  part of the non-public code).
 - `src/g1nav/locomotion/walk_eval.py` (code release) — truthful raw-env evaluation (forward velocity,
   torso height, net distance; no AutoReset masking); its CPU outputs are in `results/walk_sweep_cpu/`.
 - `media/` — closed-loop instruction-following episodes (ego ∥ third-person).

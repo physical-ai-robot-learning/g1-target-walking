@@ -12,5 +12,5 @@ What is here and where it comes from:
   (`g1nav.navigation.rerun_demo_episodes`, `walk_eval` sweep).
 - 2026-11-05: layout and code-style refactor without behaviour change (refactor log in the code release).
 - 2026-11-16: the public repository was reduced to documentation, the technical report, media and
-  result files; source code and checkpoints are available on request (see the [README](../README.md#code-availability)).
+  result files; source code and checkpoints are not publicly released (see the [README](../README.md#code-availability)).
 - Third-party content and licences: [third_party.md](third_party.md).

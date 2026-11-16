@@ -14,7 +14,7 @@ report-check script; an unmapped number or a stale mapping fails. The report als
 is reported, that the Eagle embedding does not influence the target and that the system is not a
 vision-language-action model. The numbers in the README, the archived report and `media/README.md` are recomputed
 from the result files by the claims-check script. Both scripts, the LaTeX source and the figure script are part of
-the code release, available on request (see the [README](../README.md#code-availability)).
+the non-public code (see the [README](../README.md#code-availability)).
 
 ## Layout
 - `report_en.pdf`: the current report.

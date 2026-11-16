@@ -4,7 +4,7 @@ The [LICENSE](../LICENSE) file (PolyForm Noncommercial 1.0.0) covers the origina
 documentation, results and media of this project. It does **not** cover the third-party
 parts listed below, which keep their own licences. This public repository contains the
 documentation, report, results and media; the source code, vendored assets and checkpoints listed
-below belong to the code release, which is available on request.
+below belong to the non-public code.
 
 ## Vendored in the code release
 

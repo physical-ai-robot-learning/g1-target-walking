@@ -3,7 +3,7 @@
 **Training outputs** (`checkpoints/`, was `checkpoint/` before the 2026-11 refactor): `walk_t4_metrics.jsonl` (evaluation
 reward and wall-clock per checkpoint) and `walk_t4_rollout.{json,mp4}` (training-time raw-env rollout of the final
 checkpoint). Written by `g1nav.locomotion.train_walk`. The checkpoints themselves (`walk_t4_latest.pkl` + the 16 numbered
-`walk_t4_step*.pkl` brax parameter pickles, `{"step", "params"}`) are available on request together with the code.
+`walk_t4_step*.pkl` brax parameter pickles, `{"step", "params"}`) are part of the non-public code.
 
 **Re-measurements** made after the original runs, so that every closed-loop and walking number
 in the README can be checked from files in the repository. Both were produced on a CPU-only
